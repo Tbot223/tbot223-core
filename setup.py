@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name='tbot223-core',
     version='3.0.0',
-    description='A core utility package for tbot223 projects.',
+    description='Python utility library with Result pattern for consistent error handling, file operations, parallel execution, and logging.',
     long_description=long_description,
     long_description_content_type="text/markdown",
     author='tbot223',
@@ -14,7 +14,14 @@ setup(
     url='https://github.com/Tbot223/tbot223-core',
     install_requires=[],
     packages=find_packages(include=['tbot223_core', 'tbot223_core.*']),
-    keywords=['pypi', 'package', 'utilities', 'python', 'tbot223'],
+    keywords=[
+        'result-pattern', 'error-handling', 'result',
+        'file-operations', 'atomic-write', 
+        'parallel-execution', 'thread-pool', 'process-pool',
+        'logging', 'exception-tracking',
+        'shared-memory', 'thread-safe',
+        'utilities', 'debugging'
+    ],
     python_requires='>=3.10',
     classifiers=[
         'Programming Language :: Python :: 3.10',
