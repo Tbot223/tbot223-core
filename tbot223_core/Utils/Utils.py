@@ -129,7 +129,7 @@ class Utils:
                     found_keys.append({key: self._lookup_dict(value, threshold, comparison_func, comparison_type, nested, separator, "forest")})
                 elif return_mod == "path":
                     found_keys.extend(self._lookup_dict(value, threshold, comparison_func, comparison_type, nested, separator, "path", f"{prefix_marker}{key}{separator}"))
-            elif type(value) != type(threshold) and comparison_type in ('eq', 'ne'):
+            elif type(value) is not type(threshold) and comparison_type in ('eq', 'ne'):
                 if self.__is_logging_enabled__:
                     self.log.log_message("DEBUG", f"Type mismatch at key '{key}': {type(value).__name__} vs {type(threshold).__name__}. Skipping.")
                 continue

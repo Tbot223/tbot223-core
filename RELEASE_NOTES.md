@@ -1,5 +1,36 @@
 # Release Notes
 
+## [3.0.1] - 2026-03-20
+
+### Fixed
+
+- **ResultWrapper**: Reuse single `ExceptionTracker` instance instead of creating a new one per exception
+- **Exception**: Improved `get_exception_info()` / `get_exception_return()` params validation — now properly rejects `None`, non-tuple, and wrong-length params with a clearer error message
+- **Utils**: Changed `type(value) != type(threshold)` to `type(value) is not type(threshold)` for PEP 8 compliance in `find_keys_by_value()`
+
+### Changed
+
+- **Decorators**: Added `functools.wraps` to preserve function metadata (`__name__`, `__doc__`) in:
+  - `ResultWrapper`
+  - `ExceptionTrackerDecorator`
+  - `DecoratorUtils.count_runtime()`
+- **Type Hints**: Improved type annotations for decorator return types in `ResultWrapper`, `ExceptionTrackerDecorator`, and `DecoratorUtils.count_runtime()`
+- **Package**: Updated description and keywords in `setup.py` for better discoverability
+
+### Tests
+
+- **Added**: `TestResultWrapperMetadata` — verifies `functools.wraps` preserves `__name__` and `__doc__` in `ResultWrapper`
+- **Added**: `TestExceptionDecoratorMetadata` — verifies `functools.wraps` preserves `__name__` and `__doc__` in `ExceptionTrackerDecorator`
+- **Added**: `TestExceptionParamsValidation` — tests for `None`, non-tuple, and wrong-length params rejection in `get_exception_info()` / `get_exception_return()`
+- **Added**: `test_count_runtime_preserves_function_metadata` — verifies `functools.wraps` in `count_runtime()`
+- **Fixed**: `test_shm_memory_overflow` — use PID-unique shared memory name and larger payload to avoid OS page-alignment false positives
+
+### Known Issues
+
+- **AppCore_test.py**: Cannot run due to broken `numpy` native library dependency (`libgfortran.5.dylib` not found). This is an environment-specific issue, not a code bug.
+
+---
+
 ## [3.0.0] - 2026-02-07
 
 ### Breaking Changes
