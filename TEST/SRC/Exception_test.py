@@ -402,5 +402,60 @@ class TestExceptionInfoStructure:
             assert isinstance(location["line"], int)
 
 
+@pytest.mark.usefixtures("tracker")
+class TestExceptionParamsValidation:
+    """Tests for improved params validation in get_exception_info"""
+
+    def test_get_exception_info_none_params(self, tracker: Exception.ExceptionTracker) -> None:
+        """Test get_exception_info rejects None params"""
+        try:
+            1 / 0
+        except ZeroDivisionError as e:
+            result = tracker.get_exception_info(e, params=None, mask_tuple=(False, False, False, False))
+            assert result.success is False
+
+    def test_get_exception_info_invalid_params_not_tuple(self, tracker: Exception.ExceptionTracker) -> None:
+        """Test get_exception_info rejects non-tuple params"""
+        try:
+            1 / 0
+        except ZeroDivisionError as e:
+            result = tracker.get_exception_info(e, params=[(), {}], mask_tuple=(False, False, False, False))
+            assert result.success is False
+
+    def test_get_exception_info_invalid_params_wrong_length(self, tracker: Exception.ExceptionTracker) -> None:
+        """Test get_exception_info rejects tuple with wrong length"""
+        try:
+            1 / 0
+        except ZeroDivisionError as e:
+            result = tracker.get_exception_info(e, params=((),), mask_tuple=(False, False, False, False))
+            assert result.success is False
+
+    def test_get_exception_return_none_params(self, tracker: Exception.ExceptionTracker) -> None:
+        """Test get_exception_return rejects None params"""
+        try:
+            1 / 0
+        except ZeroDivisionError as e:
+            result = tracker.get_exception_return(e, params=None, mask_tuple=(False, False, False, False))
+            assert result.success is False
+
+
+@pytest.mark.usefixtures("tracker")
+class TestExceptionDecoratorMetadata:
+    """Tests for ExceptionTrackerDecorator preserving function metadata via functools.wraps"""
+
+    @Exception.ExceptionTrackerDecorator(mask_tuple=(False, False, False, False))
+    def named_decorated_function(self, x: int) -> int:
+        """Docstring for named function."""
+        return x + 1
+
+    def test_decorator_preserves_name(self) -> None:
+        """Test ExceptionTrackerDecorator preserves __name__"""
+        assert self.named_decorated_function.__name__ == "named_decorated_function"
+
+    def test_decorator_preserves_docstring(self) -> None:
+        """Test ExceptionTrackerDecorator preserves __doc__"""
+        assert self.named_decorated_function.__doc__ == "Docstring for named function."
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import logging
+from functools import wraps
 
 #internal Modules
 from tbot223_core.Result import Result
@@ -519,9 +520,10 @@ class ResultWrapper:
         >>> print(result.data)     # Output: 15
     """
     def __init__(self):
-        pass
+        self._exception_tracker = ExceptionTracker()
 
-    def __call__(self, func: Callable[..., Any]) -> Result:
+    def __call__(self, func: Callable[..., Any]) -> Callable[..., Result]:
+        @wraps(func)
         def wrapper(*args, **kwargs) -> Result:
             try:
                 result = func(*args, **kwargs)
@@ -530,6 +532,5 @@ class ResultWrapper:
                 
                 return Result(True, None, None, result)
             except Exception as e:
-                tracker = ExceptionTracker()
-                return tracker.get_exception_return(error=e, params=(args, kwargs))
+                return self._exception_tracker.get_exception_return(e, params=(args, kwargs))
         return wrapper

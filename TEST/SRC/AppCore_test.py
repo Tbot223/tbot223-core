@@ -616,5 +616,27 @@ class TestSafeCLIInput:
             assert result.data is True
 
 
+@pytest.mark.usefixtures("test_appcore_initialization")
+class TestResultWrapperMetadata:
+    """Tests for ResultWrapper preserving function metadata via functools.wraps"""
+
+    def test_result_wrapper_preserves_name(self, test_appcore_initialization: AppCore) -> None:
+        """Test ResultWrapper preserves __name__"""
+        @ResultWrapper()
+        def my_special_function(x):
+            return x * 2
+
+        assert my_special_function.__name__ == "my_special_function"
+
+    def test_result_wrapper_preserves_docstring(self, test_appcore_initialization: AppCore) -> None:
+        """Test ResultWrapper preserves __doc__"""
+        @ResultWrapper()
+        def documented_function(x):
+            """This is the docstring."""
+            return x
+
+        assert documented_function.__doc__ == "This is the docstring."
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-m not performance"])

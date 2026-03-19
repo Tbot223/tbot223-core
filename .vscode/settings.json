@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^python -m pytest TEST/SRC/Exception_test\\.py TEST/SRC/FileManager_test\\.py TEST/SRC/LogSys_test\\.py TEST/SRC/Result_test\\.py TEST/SRC/Utils_test\\.py -v --tb=short -m \"not performance\" 2>&1 \\| tail -100$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

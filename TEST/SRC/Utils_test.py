@@ -690,13 +690,21 @@ class TestSharedMemoryFailures:
         """Test syncing data larger than shared memory size"""
         _, _, global_vars = setup_module
         
-        shm_name = "test_overflow"
-        small_size = 64  # Very small size
+        shm_name = f"test_ovfl_{os.getpid()}"
+        small_size = 64  # Request small size (OS may page-align to 4096+)
+        
+        # Ensure no stale shared memory exists
+        try:
+            stale = shared_memory.SharedMemory(name=shm_name)
+            stale.close()
+            stale.unlink()
+        except FileNotFoundError:
+            pass
         
         global_vars.shm_gen(name=shm_name, size=small_size, create_lock=False)
         
-        # Set a large variable
-        global_vars.set("large_var", "x" * 1000)
+        # Set a variable large enough to exceed even page-aligned shared memory (typically 4096)
+        global_vars.set("large_var", "x" * 100000)
         
         # Try to sync - should fail due to size
         result = global_vars.shm_sync(shm_name)
@@ -947,6 +955,18 @@ class TestDecoratorUtilsMethods:
         
         with pytest.raises(ValueError):
             failing_func()
+
+    def test_count_runtime_preserves_function_metadata(self, setup_module):
+        """Test that count_runtime preserves function name and docstring via functools.wraps"""
+        _, decorator_utils, _ = setup_module
+
+        @decorator_utils.count_runtime()
+        def my_named_function():
+            """My docstring."""
+            return 42
+
+        assert my_named_function.__name__ == "my_named_function"
+        assert my_named_function.__doc__ == "My docstring."
 
 
 if __name__ == "__main__":

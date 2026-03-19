@@ -4,7 +4,8 @@ import os
 import platform
 import time
 import traceback
-from typing import Any, Tuple
+from typing import Any, Tuple, Callable, Union
+from functools import wraps
 
 # internal modules
 from tbot223_core.Result import Result
@@ -111,8 +112,8 @@ class ExceptionTracker():
         try:
             if error is None:
                 raise ValueError("The 'error' argument must be an Exception instance, not None.")
-            if isinstance(params[0], tuple) is False or isinstance(params[1], dict) is False:
-                raise ValueError("The 'params' argument must be a tuple of (args, kwargs).")
+            if params is None or not isinstance(params, tuple) or not len(params) == 2 or not isinstance(params[0], tuple) or not isinstance(params[1], dict):
+                raise ValueError("The 'params' argument must be a tuple of (args, kwargs). (if you want empty, use '((), {})' )")
             if not isinstance(mask_tuple, tuple) or not all(isinstance(i, bool) for i in mask_tuple):
                 raise ValueError("The 'mask_tuple' argument must be a tuple of booleans.")
             if len(mask_tuple) != 4:
@@ -276,8 +277,9 @@ class ExceptionTrackerDecorator():
         if len(self.mask_tuple) != 4:
             self.mask_tuple = (False, False, False, False)
 
-    def __call__(self, func):
-        def wrapper(*args, **kwargs):
+    def __call__(self, func: Callable[..., Any]) -> Callable[..., Union[Any, Result]]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Union[Any, Result]:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
