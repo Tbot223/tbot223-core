@@ -101,7 +101,7 @@ class TestFileManager:
         # Ensure directory is deleted
         assert not test_dir.exists(), "Test directory still exists after deletion."
 
-    def create_directory(self, file_manager, tmp_path):
+    def test_create_directory(self, file_manager, tmp_path):
         test_dir = tmp_path / "new_test_dir"
 
         # Test create directory

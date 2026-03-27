@@ -1,5 +1,33 @@
 # Release Notes
 
+## [3.1.0] - 2026-03-27
+
+### Security
+
+- **GlobalVars**: Changed default serialization format for `shm_sync()` and `shm_update()` from `"pickle"` to `"json"` — pickle deserialization of untrusted data can execute arbitrary code. Existing code relying on the pickle default must now pass `serialize_format="pickle"` explicitly.
+
+### Fixed
+
+- **FileManager**: Fixed potential `NameError` in `atomic_write()` — `temp_path` is now initialized to `None` before the `try` block, preventing a reference error if the temp file is never created
+- **FileManager**: Narrowed bare `except:` to `except TypeError:` in `delete_directory()` fallback path (`onexc` → `onerror`) to avoid suppressing unrelated exceptions
+- **GlobalVars**: Hardened `__getattr__` exception handling — `KeyError` (key not found) is now caught separately from unexpected errors, which are routed through `_exception_tracker` instead of being silently swallowed
+- **LogSys**: `LoggerManager` and `Log` now hold a persistent `_exception_tracker` instance instead of creating a new `ExceptionTracker()` on every exception
+- **AppCore**: Executor shutdown errors in `_generic_executor()` are now tracked via `_exception_tracker`
+- **Utils**: Changed `isinstance(...) is False` to `not isinstance(...)` in `find_keys_by_value()` for PEP 8 compliance
+- **Exception**: `get_exception_return()` `params` default changed from `None` to `((), {})` — the previous default caused the params validation in `get_exception_info()` to always reject it, making parameterless calls fail
+- **Exception**: `get_error_code()` return type annotation corrected from `None` to `Result`
+
+### Changed
+
+- **All modules**: Extracted repeated `if self.__is_logging_enabled__: self.log.log_message(...)` into a `_log(level, message)` helper method on each class — reduces boilerplate and centralizes the logging guard
+- **GlobalVars**: `shm_update()` deserialization error message now reflects the actual `serialize_format` in use instead of hardcoding `"pickle"`
+- **Documentation**: Unified docstring Args format to backtick style (`` `param` : description ``) across all modules
+- **README**: Corrected `encrypt()` → `hashing()` (wrong method name); removed `_lock()` from public API listing; added `exist()` method name to FileManager; added `stop_stream_handlers()` to LogSys; added `get_error_code()` to ExceptionTracker; added `ResultWrapper` class with usage example; expanded `LogSys` section with per-method descriptions and `SimpleSetting` usage; updated `AppCore` section with spawn context note and `pause` parameter; updated GlobalVars serialization description to reflect JSON-as-default
+- **AppCore**: `ProcessPoolExecutor` now passes `mp_context=multiprocessing.get_context("spawn")` — enforces spawn start method for safer cross-platform process creation and avoids fork-related issues on macOS/Windows
+- **AppCore**: `safe_CLI_input()` enhanced with `EOFError` handling (sets empty string for non-interactive terminals), `KeyboardInterrupt` handling (returns `Result(False, ...)` immediately), and full bool type conversion support — accepts common true/false strings (`"yes"`, `"no"`, `"1"`, `"0"`, `"on"`, `"off"`, etc.) and converts them to `bool`
+
+---
+
 ## [3.0.1] - 2026-03-20
 
 ### Fixed

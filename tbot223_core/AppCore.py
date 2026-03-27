@@ -6,6 +6,7 @@ from typing import Any, Callable, List, Dict, Tuple, Union, Optional, Generator
 import math
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+import multiprocessing
 import logging
 from functools import wraps
 
@@ -35,7 +36,7 @@ class AppCore:
 
         process_pool_executor(data, workers, override, timeout) -> Result:
             Execute functions in parallel using ProcessPoolExecutor.
-        
+
         get_text_by_lang(key, lang) -> Result:
             Retrieve localized text for the given key and language.
 
@@ -48,10 +49,10 @@ class AppCore:
         restart_application() -> Result:
             Restart the current application. ( Returns Only On Failure )
     """
-    
+
     def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, default_lang: str="en",
                  base_dir: Union[str, Path]=None,
-                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None, 
+                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
                  log_instance: Optional[Log]=None, filemanager: Optional[FileManager]=None):
 
         # Initialize paths
@@ -73,30 +74,32 @@ class AppCore:
             self.logger = logger or self._logger_manager.get_logger("AppCoreLogger").data
         self.log = log_instance or Log(logger=self.logger)
         self._file_manager  = filemanager or FileManager(is_logging_enabled=False, base_dir=self._PARENT_DIR)
-        
+
         # Initialize internal variables
         self._lang_cache = {}
         self._default_lang = default_lang
         self._supported_langs_getter = lambda self: self._file_manager.list_of_files(self._LANG_DIR, extensions=['.json'], only_name=True).data
         self._supported_langs = self._supported_langs_getter(self)
         if self._supported_langs is None or len(self._supported_langs) == 0:
-            if self.__is_logging_enabled__:
-                self.log.log_message("WARNING", "No language files found in Languages directory.")
+            self._log("WARNING", "No language files found in Languages directory.")
 
+        self._log("INFO", f"AppCore initialized. Supported languages: {self._supported_langs}")
+
+    def _log(self, level: str, message: str) -> None:
         if self.__is_logging_enabled__:
-            self.log.log_message("INFO", f"AppCore initialized. Supported languages: {self._supported_langs}")
-    
+            self.log.log_message(level, message)
+
     # internal Methods
     @staticmethod
     def _check_executable(data: List[Tuple[Callable[ ... , Any], Dict]], workers: int, override: bool, timeout: float, chunk_size: Optional[int] = None) -> Tuple[bool, Optional[str]]:
         """
         Check if the functions in data and workers are valid for execution.
-        
+
         Args:
-            data : List of tuples containing functions and their parameters.
-            workers : Number of worker threads/processes.
-            override : If True, allows workers to exceed the number of tasks.
-            timeout : Maximum time to wait for each function to complete.
+            `data` : List of tuples containing functions and their parameters.
+            `workers` : Number of worker threads/processes.
+            `override` : If True, allows workers to exceed the number of tasks.
+            `timeout` : Maximum time to wait for each function to complete.
 
         Returns:
             Tuple (is_valid: bool, error_message: Optional[str])
@@ -124,16 +127,16 @@ class AppCore:
         if chunk_size is not None and (not isinstance(chunk_size, int) or chunk_size <= 0):
             return False, "chunk_size must be a positive integer"
         return True, None
-    
+
     def _generic_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int, timeout: float, type: str) -> List[Result]:
         """
         Generic executor method to be used by both thread and process pool executors.
 
         Args:
-            data : List of tuples containing functions and their parameters.
-            workers : Number of worker threads/processes.
-            timeout : Maximum time to wait for each function to complete. (not per task, total timeout is timeout * number of tasks)
-            type : 'thread' for ThreadPoolExecutor, 'process' for ProcessPoolExecutor.
+            `data` : List of tuples containing functions and their parameters.
+            `workers` : Number of worker threads/processes.
+            `timeout` : Maximum time to wait for each function to complete. (not per task, total timeout is timeout * number of tasks)
+            `type` : 'thread' for ThreadPoolExecutor, 'process' for ProcessPoolExecutor.
 
         Returns:
             indexed list of Result objects corresponding to each function execution.
@@ -147,8 +150,11 @@ class AppCore:
         """
         results = [None] * len(data)
 
-        executor_type = ThreadPoolExecutor if type == 'thread' else ProcessPoolExecutor
-        with executor_type(max_workers=workers) as executor:
+        executor_class = ThreadPoolExecutor if type == 'thread' else ProcessPoolExecutor
+        executor_kwargs = {"max_workers": workers}
+        if type == 'process':
+            executor_kwargs["mp_context"] = multiprocessing.get_context("spawn")
+        with executor_class(**executor_kwargs) as executor:
             future_to_task = {executor.submit(func, **params): idx for idx, (func, params) in enumerate(data)}
 
             for future in as_completed(future_to_task, timeout=timeout * len(future_to_task)):
@@ -157,24 +163,23 @@ class AppCore:
                     result = future.result(timeout=timeout)
                     results[idx] = Result(True, None, None, result)
                 except Exception as e:
-                    if self.__is_logging_enabled__:
-                        self.log.log_message("ERROR", f"Error executing task at index {idx}: {str(e)}")
+                    self._log("ERROR", f"Error executing task at index {idx}: {str(e)}")
                     results[idx] = self._exception_tracker.get_exception_return(e, params=data[idx][1])
-                    
+
             try:
                 executor.shutdown(wait=True)
             except Exception as e:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Error during executor shutdown: {str(e)}")
+                self._log("ERROR", f"Error during executor shutdown: {str(e)}")
+                self._log("ERROR", self._exception_tracker.get_exception_return(e).data)
         return results
-    
+
     def _chunk_list(self, data_list: List, chunk_size: int) -> Generator[List, None, None]:
         """
         Helper method to split a list into smaller chunks.
 
         Args:
-            data_list : The list to be chunked.
-            chunk_size : The size of each chunk.
+            `data_list` : The list to be chunked.
+            `chunk_size` : The size of each chunk.
 
         Returns:
             A list of chunks (sublists).
@@ -193,13 +198,13 @@ class AppCore:
         """
         Decorator to manage language cache in get_text_by_lang method.
         If a KeyError occurs, it attempts to reload the language file and retry the lookup.
-        
+
         Args:
-            func : The get_text_by_lang method to be decorated.
-            
+            `func` : The get_text_by_lang method to be decorated.
+
         Returns:
             The wrapped function with language cache management.
-            
+
         Example:
             >>> # it's made for "get_text_by_lang" method only.
             >>> @AppCore.__lang_cache_management__
@@ -218,17 +223,15 @@ class AppCore:
                     else:
                         return res
                     if key in lang_file:
-                        if self.__is_logging_enabled__:
-                            self.log.log_message("INFO", f"Reloaded language file for '{lang}' after KeyError.")
+                        self._log("INFO", f"Reloaded language file for '{lang}' after KeyError.")
                         self._lang_cache[lang] = lang_file
                         return func(self, *args, **kwargs)
                     else:
-                        if self.__is_logging_enabled__:
-                            self.log.log_message("ERROR", f"Key '{key}' still not found in language '{lang}'. it may have been removed.")
+                        self._log("ERROR", f"Key '{key}' still not found in language '{lang}'. it may have been removed.")
                         return Result(False, res.error, "Dose not exist key even after reloading lang file", res.data)
             return res
         return wrapper
-                
+
 
     # external Methods
     def thread_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int = os.cpu_count(), override: bool = False, timeout: float = None) -> Result:
@@ -236,10 +239,10 @@ class AppCore:
         Execute functions in parallel using ThreadPoolExecutor.
 
         Args:
-            data : List of tuples, Each containing a function and a dictionary of arguments. Example: [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
-            workers : Number of worker threads to use. Defaults to os.cpu_count().
-            override : If True, allows workers to exceed the number of tasks. also limits is unlocked.
-            timeout : Maximum time to wait for each function to complete. ( 0.1 seconds minimum )
+            `data` : List of tuples, Each containing a function and a dictionary of arguments. Example: [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
+            `workers` : Number of worker threads to use. Defaults to os.cpu_count().
+            `override` : If True, allows workers to exceed the number of tasks. also limits is unlocked.
+            `timeout` : Maximum time to wait for each function to complete. ( 0.1 seconds minimum )
 
         Returns:
             indexed list of Result objects corresponding to each function execution.
@@ -253,18 +256,15 @@ class AppCore:
         try:
             is_valid, error_message = self._check_executable(data, workers, override, timeout)
             if not is_valid:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Thread pool executor validation failed: {error_message}")
+                self._log("ERROR", f"Thread pool executor validation failed: {error_message}")
                 return Result(False, error_message, None, None)
             workers = min(workers or os.cpu_count(), os.cpu_count()) if override else workers
             results = self._generic_executor(data, workers, timeout, type='thread')
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Thread pool executor completed with {len(results)} tasks.")
+            self._log("INFO", f"Thread pool executor completed with {len(results)} tasks.")
             return Result(True, None, None, results)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in thread pool executor: {str(e)}")
+            self._log("ERROR", f"Error in thread pool executor: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
 
     def process_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int = os.cpu_count(), override: bool = False, timeout: float = None, chunk_size: Optional[int] = None) -> Result:
@@ -272,11 +272,11 @@ class AppCore:
         Execute functions in parallel using ProcessPoolExecutor.
 
         Args:
-            data : List of tuples, Each containing a function and a dictionary of arguments. Example: [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
-            workers : Number of worker processes to use. Defaults to os.cpu_count().
-            override : If True, allows workers to exceed the number of tasks. also limits is unlocked.
-            timeout : Maximum time to wait for each function to complete. ( 0.1 seconds minimum )
-            chunk_size : Number of tasks to submit at once to each worker process. If None, it will be calculated based on the number of workers and total tasks.
+            `data` : List of tuples, Each containing a function and a dictionary of arguments. Example: [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
+            `workers` : Number of worker processes to use. Defaults to os.cpu_count().
+            `override` : If True, allows workers to exceed the number of tasks. also limits is unlocked.
+            `timeout` : Maximum time to wait for each function to complete. ( 0.1 seconds minimum )
+            `chunk_size` : Number of tasks to submit at once to each worker process. If None, it will be calculated based on the number of workers and total tasks.
 
         Returns:
             indexed list of Result objects corresponding to each function execution.
@@ -290,8 +290,7 @@ class AppCore:
         try:
             is_valid, error_message = self._check_executable(data, workers, override, timeout, chunk_size)
             if not is_valid:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Process pool executor validation failed: {error_message}")
+                self._log("ERROR", f"Process pool executor validation failed: {error_message}")
                 return Result(False, error_message, None, None)
             workers = min(workers or os.cpu_count(), os.cpu_count()) if override else workers
             computed_chunk = chunk_size if chunk_size is not None else max(1, int(math.ceil(len(data) / workers)))
@@ -301,14 +300,12 @@ class AppCore:
                 chunk_results = self._generic_executor(chunk, workers, timeout, type='process')
                 results.extend(chunk_results)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Process pool executor completed with {len(results)} tasks.")
+            self._log("INFO", f"Process pool executor completed with {len(results)} tasks.")
             return Result(True, None, None, results)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in process pool executor: {str(e)}")
+            self._log("ERROR", f"Error in process pool executor: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     @__lang_cache_management__
     def get_text_by_lang(self, key: str, lang: str) -> Result:
         """
@@ -317,9 +314,9 @@ class AppCore:
         - If the key does not exist in the language file, return an error.
 
         Args:
-            key : The key for the desired text.
-            lang : The language code (e.g., 'en', 'fr').
-        
+            `key` : The key for the desired text.
+            `lang` : The language code (e.g., 'en', 'fr').
+
         Returns:
             The localized text corresponding to the key and language.
 
@@ -336,29 +333,24 @@ class AppCore:
                 lang = self._default_lang
 
             if lang not in self._lang_cache:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("INFO", f"Loading language file for '{lang}'.")
+                self._log("INFO", f"Loading language file for '{lang}'.")
                 lang_file_path = self._LANG_DIR / f"{lang}.json"
                 read_result = self._file_manager.read_json(lang_file_path)
                 if not read_result.success:
-                    if self.__is_logging_enabled__:
-                        self.log.log_message("ERROR", f"Failed to read language file for '{lang}': {read_result.error}")
+                    self._log("ERROR", f"Failed to read language file for '{lang}': {read_result.error}")
                     return read_result
                 self._lang_cache[lang] = read_result.data
 
             if key not in self._lang_cache[lang]:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Key '{key}' not found in language '{lang}'.")
+                self._log("ERROR", f"Key '{key}' not found in language '{lang}'.")
                 raise KeyError(f"Key '{key}' not found in language '{lang}'.")
-            
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Retrieved text for key '{key}' in language '{lang}'.")
+
+            self._log("INFO", f"Retrieved text for key '{key}' in language '{lang}'.")
             return Result(True, None, None, self._lang_cache[lang][key])
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in get_text_by_lang: {str(e)}")
+            self._log("ERROR", f"Error in get_text_by_lang: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def clear_console(self) -> Result:
         """
         Clear the console screen using the appropriate command based on the operating system.
@@ -373,21 +365,19 @@ class AppCore:
             command = 'cls' if os.name == 'nt' else 'clear'
             subprocess.run(command, shell=True, check=True)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", "Console cleared successfully.")
+            self._log("INFO", "Console cleared successfully.")
             return Result(True, None, None, "Console cleared successfully.")
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in clear_console: {str(e)}")
+            self._log("ERROR", f"Error in clear_console: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def exit_application(self, code: int=0, pause: bool=False) -> Result:
         """
         Exit the application with the specified exit code.
 
         Args:
-            code : Exit code to return to the operating system. Default is 0.
-            pause : If True, waits for user input before exiting. Default is False.
+            `code` : Exit code to return to the operating system. Default is 0.
+            `pause` : If True, waits for user input before exiting. Default is False.
 
         Returns:
             returns only on failure with a Result object indicating the error.
@@ -396,22 +386,20 @@ class AppCore:
             >>> result = app_core.exit_application(0) # then application exits with code 0
         """
         try:
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Exiting application with code {code}.")
+            self._log("INFO", f"Exiting application with code {code}.")
             if pause:
                 input("Press Enter to exit...")
             sys.exit(code)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in exit_application: {str(e)}")
+            self._log("ERROR", f"Error in exit_application: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
-    
+
     def restart_application(self, pause: bool=False) -> Result:
         """
         Restart the current application.
 
         Args:
-            pause : If True, waits for user input before restarting. Default is False.
+            `pause` : If True, waits for user input before restarting. Default is False.
 
         Returns:
             returns only on failure with a Result object indicating the error.
@@ -421,31 +409,39 @@ class AppCore:
         """
         try:
             python = sys.executable
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", "Restarting application.")
+            self._log("INFO", "Restarting application.")
             if pause:
                 input("Press Enter to restart...")
             os.execl(python, python, * sys.argv)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in restart_application: {str(e)}")
+            self._log("ERROR", f"Error in restart_application: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def safe_CLI_input(self, prompt: str="", input_type: type=str, other_type: type=False, valid_options: List[str]=None, case_sensitive: bool=False, allow_empty: bool=False, max_retries: int=10) -> Result:
         """
         Safely get user input from the command line with validation.
 
         Args:
-            prompt : The prompt message to display to the user.
-            input_type : The expected type of the user input. Default is str. (expected types: str, int, float, bool)
-            other_type : If True, allows conversion to types other than the supported ones.
-            valid_options : A list of valid options. If provided, input must match one of these options.
-            case_sensitive : If True, input validation is case sensitive.
-            allow_empty : If True, allows empty input.
-            max_retries : Maximum number of retry attempts before returning failure. Default is 10.
-        
+            `prompt` : The prompt message to display to the user.
+            `input_type` : The expected type of the user input. Default is str. (expected types: str, int, float, bool)
+            `other_type` : If True, allows conversion to types other than the supported ones.
+            `valid_options` : A list of valid options. If provided, input must match one of these options.
+            `case_sensitive` : If True, input validation is case sensitive.
+            `allow_empty` : If True, allows empty input.
+            `max_retries` : Maximum number of retry attempts before returning failure. Default is 10.
+
+        Note:
+            - If `input_type` is bool, it will accept common `true/false` values `(e.g., "true", "false", "yes", "no", "1", "0")` and convert them to boolean.
+                `[ "true", "t", "yes", "y", "1", "on", "enable", "enabled" ]` will be considered as True
+                `[ "false", "f", "no", "n", "0", "off", "disable", "disabled" ]` will be considered as False
+                WARNING: If `input_type` is bool, ensure `valid_options` contains values from the supported true/false lists above (e.g., `["y", "n"]`).
+                Using unsupported values (e.g., `["ok", "cancel"]`) will cause conversion to fail even if validation passes.
+            - If `valid_options` is provided, the input will be validated against this list. If `case_sensitive` is False, the validation will be case insensitive.
+            - If `allow_empty` is False, empty input will be rejected and the user will be prompted again.
+            - The method will keep prompting the user until valid input is received or `max_retries` is exceeded.
+
         Returns:
-            The user input if it passes validation, or a Result object with success=False if max retries exceeded.
+            The user input if it passes validation, or a Result object with `success=False` if `max_retries` is exceeded.
 
         Example:
             >>> result = app_core.safe_CLI_input(prompt="Enter your choice: ", valid_options=["yes", "no"], case_sensitive=False, max_retries=3)
@@ -460,7 +456,7 @@ class AppCore:
                 raise ValueError("max_retries must be a positive integer")
             if not other_type and input_type not in SUPPORTED_TYPES:
                 raise ValueError(f"input_type must be one of {SUPPORTED_TYPES} or other_type must be True")
-            
+
             def validate_input(user_input: str) -> bool:
                 if not allow_empty and user_input == "":
                     return False
@@ -469,39 +465,51 @@ class AppCore:
                     comparison_options = valid_options if case_sensitive else map(str.lower, valid_options)
                     return comparison_input in comparison_options
                 return True
-            
+
             retry_count = 0
             while retry_count < max_retries:
-                user_input = input(prompt)
+                try:
+                    user_input = input(prompt)
+                except EOFError:
+                    user_input = ""
+                except KeyboardInterrupt as e:
+                    self._log("WARNING", "User interrupted input with KeyboardInterrupt.")
+                    print("\nInput interrupted by user.")
+                    return Result(False, "Input interrupted by user", None, None)
                 if validate_input(user_input):
                     try:
-                        converted_input = input_type(user_input)
-                        if self.__is_logging_enabled__:
-                            self.log.log_message("INFO", f"User input received and validated: {converted_input}")
+                        if input_type == bool:
+                            true_values = {"true", "t", "yes", "y", "1", "on", "enable", "enabled"}
+                            false_values = {"false", "f", "no", "n", "0", "off", "disable", "disabled"}
+                            if user_input.lower() in true_values:
+                                converted_input = True
+                            elif user_input.lower() in false_values:
+                                converted_input = False
+                            else:
+                                raise ValueError(f"Invalid boolean input: {user_input}")
+                        else:
+                            converted_input = input_type(user_input)
+                        self._log("INFO", f"User input received and validated: {converted_input}")
                         return Result(True, None, None, converted_input)
                     except ValueError:
-                        if self.__is_logging_enabled__:
-                            self.log.log_message("WARNING", f"Input conversion to {input_type} failed for input: {user_input}")
+                        self._log("WARNING", f"Input conversion to {input_type} failed for input: {user_input}")
                         print(f"Invalid input type. Please enter a value of type {input_type.__name__}.")
                 else:
-                    if self.__is_logging_enabled__:
-                        self.log.log_message("WARNING", f"User input validation failed: {user_input}")
+                    self._log("WARNING", f"User input validation failed: {user_input}")
                     if valid_options:
                         print(f"Invalid option. Please choose from: {', '.join(valid_options)}")
                     else:
                         print("Invalid input. Please try again.")
-                
+
                 retry_count += 1
-            
+
             error_msg = f"Maximum retry attempts ({max_retries}) exceeded for user input."
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", error_msg)
+            self._log("ERROR", error_msg)
             return Result(False, error_msg, None, None)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Error in safe_CLI_input: {str(e)}")
+            self._log("ERROR", f"Error in safe_CLI_input: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
-        
+
 class ResultWrapper:
     """
     A decorator class that ensures the return value of an existing function is wrapped in a Result object.
@@ -529,7 +537,7 @@ class ResultWrapper:
                 result = func(*args, **kwargs)
                 if isinstance(result, Result):
                     return result
-                
+
                 return Result(True, None, None, result)
             except Exception as e:
                 return self._exception_tracker.get_exception_return(e, params=(args, kwargs))
