@@ -13,7 +13,7 @@ This may not align with traditional Python values. While we have strived for eas
 - **Robust File Management**: Atomic file operations, JSON handling, and safe file I/O
 - **Advanced Logging System**: Structured logging with automatic log file management
 - **Exception Tracking**: Detailed error tracking with system information and context
-- **Utility Functions**: Encryption, path handling, parallel execution, and more
+- **Utility Functions**: Hashing, path handling, parallel execution, and more
 - **Multi-language Support**: Built-in localization support
 - **Shared Memory IPC**: Inter-process communication via shared memory with process-safe locking
 
@@ -31,15 +31,31 @@ Python 3.10 - 3.12
 
 ### AppCore
 Provides core application functionalities:
-- Parallel execution with `ThreadPoolExecutor` / `ProcessPoolExecutor`
+- Parallel execution with `ThreadPoolExecutor` / `ProcessPoolExecutor` (spawn context for process pool)
 - Console management (`clear_console()`)
-- Application lifecycle control (`restart_application()`, `exit_application()`)
-- Multi-language text retrieval (`get_text_by_lang()`) 
+- Application lifecycle control (`restart_application()`, `exit_application()`) — optional `pause` parameter waits for user input before proceeding
+- Multi-language text retrieval (`get_text_by_lang()`)
     <details>
     <summary style="color:#FF7F7F">WARNING</summary>
     You must configure language files before using this feature. Place JSON language files in the Languages directory. Examples can be found in `examples`.
     </details>
-- Safe CLI input with validation and type conversion
+- Safe CLI input with validation, type conversion, and interrupt handling (`safe_CLI_input()`)
+    - Supports `str`, `int`, `float`, `bool` types; bool accepts common true/false strings (`"yes"`, `"no"`, `"1"`, `"0"`, `"on"`, `"off"`, etc.)
+    - Handles `EOFError` (non-interactive terminals) and `KeyboardInterrupt` gracefully
+
+### ResultWrapper
+A decorator class that wraps any function's return value in a `Result` object. If the function already returns a `Result`, it is passed through unchanged. Exceptions are caught and returned as a `Result(False, ...)`.
+
+```python
+from tbot223_core import ResultWrapper
+
+@ResultWrapper()
+def my_function(x, y):
+    return x + y
+
+result = my_function(5, 10)
+print(result.success, result.data)  # True, 15
+```
 
 ### FileManager
 Safe and reliable file operations:
@@ -47,23 +63,25 @@ Safe and reliable file operations:
 - File read operations (`read_file()`) with text/binary modes
 - JSON read/write operations (`read_json()`, `write_json()`)
 - File/directory listing with extension filtering (`list_of_files()`)
-- File/directory existence checking
+- File/directory existence checking (`exist()`)
 - Safe file/directory deletion (`delete_file()`, `delete_directory()`)
 - Directory creation with parent support (`create_directory()`)
-- Cross-platform file locking (`_lock()`)
 
 ### LogSys
 Structured logging system:
 - Logger management with automatic file organization (`LoggerManager`)
+  - `make_logger()` — create a named logger with file + console handlers
+  - `get_logger()` — retrieve a named logger instance
+  - `stop_stream_handlers()` — remove console (stream) handler from a logger at runtime
 - Time-stamped log files
 - Configurable log levels
-- Centralized log instances (`Log`)
-- Simple setup helper (`SimpleSetting`)
+- Centralized log instances (`Log`) — wraps a `logging.Logger` for structured `log_message(level, message)` calls
+- Simple one-call setup helper (`SimpleSetting(base_dir, second_log_dir, logger_name)`) — creates `LoggerManager`, `Log`, and `logging.Logger` in one step; retrieve them via `get_instance()`
 
 ### Utils (Utils/Utils.py)
 Collection of utility functions:
 - Path conversions (`str_to_path()`)
-- Encryption (`encrypt()`) - md5, sha1, sha256, sha512
+- Hashing (`hashing()`) - md5, sha1, sha256, sha512
 - PBKDF2 HMAC hash generation and verification (`pbkdf2_hmac()`, `verify_pbkdf2_hmac()`)
 - List/string manipulation (`insert_at_intervals()`)
 - Dictionary operations (`find_keys_by_value()`) with comparison operators
@@ -77,12 +95,12 @@ Thread-safe global variable management with shared memory support:
 - Call syntax for get/set operations (`gv("key", value)`)
 - Shared memory creation (`shm_gen()`) with optional `multiprocessing.Lock`
 - Shared memory connection for child processes (`shm_connect()`)
-- Shared memory synchronization (`shm_sync()`, `shm_update()`) with pickle/json serialization
+- Shared memory synchronization (`shm_sync()`, `shm_update()`) — **JSON serialization by default** (pass `serialize_format="pickle"` to use pickle)
 - Shared memory access with LRU cache (`shm_get()`, `shm_cache_management()`)
 - Shared memory cleanup (`shm_close()`) with optional `close_only` mode
 - Context manager support (`with gv:`) for thread-safe operations
 - Internal thread lock access (`lock()`)
-- **Security**: JSON serialization option for safer IPC with untrusted processes
+- **Security**: JSON is the default serialization format — pickle deserialization of untrusted data can execute arbitrary code. Use `serialize_format="pickle"` only when all communicating processes are trusted.
 
 #### DecoratorUtils (Utils/DecoratorUtils.py)
 Utility decorators:
@@ -93,6 +111,7 @@ Comprehensive error tracking:
 - Exception location tracking (`get_exception_location()`)
 - Detailed exception info with system context (`get_exception_info()`)
 - Standardized exception return (`get_exception_return()`)
+- Predefined error code lookup (`get_error_code(error_id_map, error)`) — maps exception types to user-defined codes
 - System information caching (OS, architecture, Python version)
 - Information masking support with `mask_tuple` parameter for sensitive data
 - Decorator for automatic exception handling (`ExceptionTrackerDecorator`)
@@ -156,7 +175,7 @@ System information is cached when library classes are instantiated. Access detai
         "line": 123,
         "function": "function_name"
     },
-    "origin_location" {
+    "origin_location": {
         "file": "filename",
         "line": 123,
         "function": "function_name"
@@ -204,12 +223,14 @@ result = filemanager.write_json("config.json", {"key": "value"})
 # Execute functions in parallel
 tasks = [
     (somefunc, {"some_arg1": val1}),
-    (anotherfunc, {"some_arg1": val1, "some_arg1": val2})
+    (anotherfunc, {"some_arg1": val1, "some_arg2": val2})
 ]
 result = app.thread_pool_executor(tasks, workers=4)
 ```
 
 ## Shared Memory Usage
+
+`shm_sync()` and `shm_update()` use **JSON serialization by default**. To use pickle (trusted processes only), pass `serialize_format="pickle"`.
 
 ```python
 from tbot223_core import GlobalVars
@@ -219,10 +240,10 @@ from multiprocessing import Process
 def worker(shm_name, lock):
     gv_worker = GlobalVars()
     with lock:
-        gv_worker.shm_update(shm_name)
+        gv_worker.shm_update(shm_name)  # reads from shared memory (JSON by default)
         current = gv_worker.get("counter").data
         gv_worker.set("counter", current + 1, overwrite=True)
-        gv_worker.shm_sync(shm_name)
+        gv_worker.shm_sync(shm_name)    # writes to shared memory (JSON by default)
 
 if __name__ == "__main__":
     # Main process - all setup must be inside __main__ guard
@@ -274,7 +295,7 @@ Apache License 2.0
 - **안정적인 파일 관리**: 원자적 파일 작업, JSON 처리, 안전한 파일 I/O
 - **고급 로깅 시스템**: 자동 로그 파일 관리를 통한 구조화된 로깅
 - **예외 추적**: 시스템 정보와 컨텍스트를 포함한 상세한 에러 추적
-- **유틸리티 함수**: 암호화, 경로 처리, 병렬 실행 등
+- **유틸리티 함수**: 해싱, 경로 처리, 병렬 실행 등
 - **다국어 지원**: 내장 지역화 지원
 - **공유 메모리 IPC**: 프로세스 안전 잠금을 통한 공유 메모리 프로세스 간 통신
 
@@ -292,11 +313,27 @@ Python 3.10 - 3.12
 
 ### AppCore
 핵심 애플리케이션 기능 제공:
-- `ThreadPoolExecutor` / `ProcessPoolExecutor`를 통한 병렬 실행
+- `ThreadPoolExecutor` / `ProcessPoolExecutor`를 통한 병렬 실행 (프로세스 풀은 spawn 컨텍스트 사용)
 - 콘솔 관리 (`clear_console()`)
-- 애플리케이션 생명주기 제어 (`restart_application()`, `exit_application()`)
+- 애플리케이션 생명주기 제어 (`restart_application()`, `exit_application()`) — `pause` 파라미터로 실행 전 사용자 입력 대기 가능
 - 다국어 텍스트 조회 (`get_text_by_lang()`)
-- 검증 및 타입 변환을 포함한 안전한 CLI 입력
+- 검증, 타입 변환, 인터럽트 처리를 포함한 안전한 CLI 입력 (`safe_CLI_input()`)
+    - `str`, `int`, `float`, `bool` 타입 지원; bool은 일반적인 true/false 문자열(`"yes"`, `"no"`, `"1"`, `"0"`, `"on"`, `"off"` 등) 허용
+    - `EOFError`(비대화형 터미널)와 `KeyboardInterrupt` 안전하게 처리
+
+### ResultWrapper
+함수의 반환값을 `Result` 객체로 감싸는 데코레이터 클래스. 함수가 이미 `Result`를 반환하면 그대로 통과. 예외 발생 시 `Result(False, ...)`로 반환.
+
+```python
+from tbot223_core import ResultWrapper
+
+@ResultWrapper()
+def my_function(x, y):
+    return x + y
+
+result = my_function(5, 10)
+print(result.success, result.data)  # True, 15
+```
 
 ### FileManager
 안전하고 신뢰할 수 있는 파일 작업:
@@ -304,22 +341,25 @@ Python 3.10 - 3.12
 - 텍스트/바이너리 모드 파일 읽기 (`read_file()`)
 - JSON 읽기/쓰기 (`read_json()`, `write_json()`)
 - 확장자 필터링을 포함한 파일/디렉토리 목록 (`list_of_files()`)
-- 파일/디렉토리 존재 확인
+- 파일/디렉토리 존재 확인 (`exist()`)
 - 안전한 파일/디렉토리 삭제 (`delete_file()`, `delete_directory()`)
 - 상위 디렉토리 지원 디렉토리 생성 (`create_directory()`)
 
 ### LogSys
 구조화된 로깅 시스템:
 - 자동 파일 구성을 통한 로거 관리 (`LoggerManager`)
+  - `make_logger()` — 파일 + 콘솔 핸들러를 가진 named 로거 생성
+  - `get_logger()` — named 로거 인스턴스 조회
+  - `stop_stream_handlers()` — 런타임에 콘솔(스트림) 핸들러 제거
 - 타임스탬프 로그 파일
 - 설정 가능한 로그 레벨
-- 중앙화된 로그 인스턴스 (`Log`)
-- 간단한 설정 헬퍼 (`SimpleSetting`)
+- 중앙화된 로그 인스턴스 (`Log`) — `log_message(level, message)` 호출용 `logging.Logger` 래퍼
+- 원스텝 설정 헬퍼 (`SimpleSetting(base_dir, second_log_dir, logger_name)`) — `LoggerManager`, `Log`, `logging.Logger`를 한 번에 생성; `get_instance()`로 반환
 
 ### Utils (Utils/Utils.py)
 유틸리티 함수 모음:
 - 경로 변환 (`str_to_path()`)
-- 암호화 (`encrypt()`) - md5, sha1, sha256, sha512
+- 해싱 (`hashing()`) - md5, sha1, sha256, sha512
 - PBKDF2 HMAC 해시 생성 및 검증 (`pbkdf2_hmac()`, `verify_pbkdf2_hmac()`)
 - 리스트/문자열 조작 (`insert_at_intervals()`)
 - 딕셔너리 작업 (`find_keys_by_value()`)
@@ -329,9 +369,9 @@ Python 3.10 - 3.12
 공유 메모리를 지원하는 스레드 안전 전역 변수 관리:
 - 변수 작업 (`set()`, `get()`, `delete()`, `clear()`)
 - 공유 메모리 생성 (`shm_gen()`), 연결 (`shm_connect()`)
-- 공유 메모리 동기화 (`shm_sync()`, `shm_update()`)
+- 공유 메모리 동기화 (`shm_sync()`, `shm_update()`) — **기본값은 JSON 직렬화** (`serialize_format="pickle"`으로 pickle 사용 가능)
 - 컨텍스트 관리자 지원 (`with gv:`)
-- **보안**: 신뢰할 수 없는 프로세스와의 IPC를 위한 JSON 직렬화 옵션
+- **보안**: JSON이 기본 직렬화 형식 — 신뢰할 수 없는 데이터의 pickle 역직렬화는 임의 코드를 실행할 수 있음. 모든 통신 프로세스가 신뢰되는 경우에만 `serialize_format="pickle"` 사용.
 
 #### DecoratorUtils (Utils/DecoratorUtils.py)
 유틸리티 데코레이터:
@@ -342,6 +382,7 @@ Python 3.10 - 3.12
 - 예외 위치 추적 (`get_exception_location()`)
 - 시스템 컨텍스트를 포함한 상세 예외 정보 (`get_exception_info()`)
 - 표준화된 예외 반환 (`get_exception_return()`)
+- 사용자 정의 에러 코드 조회 (`get_error_code(error_id_map, error)`) — 예외 타입을 정의된 코드로 매핑
 - 민감한 데이터를 위한 `mask_tuple` 파라미터 마스킹 지원
 - 자동 예외 처리를 위한 데코레이터 (`ExceptionTrackerDecorator`)
 

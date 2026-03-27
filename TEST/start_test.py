@@ -9,22 +9,22 @@ from SRC import AppCore_test, Exception_test, LogSys_test, Utils_test, FileManag
 from tbot223_core import FileManager
 
 class Test_CoreV2:
-    def test_AppCore(self):
+    def a_test_AppCore(self):
         pytest.main([AppCore_test.__file__, "-m not performance"])
 
-    def test_Exception(self):
+    def a_test_Exception(self):
         pytest.main([Exception_test.__file__])
 
-    def test_LogSys(self):
+    def a_test_LogSys(self):
         pytest.main([LogSys_test.__file__])
 
-    def test_Utils(self):
+    def a_test_Utils(self):
         pytest.main([Utils_test.__file__])
 
-    def test_FileManager(self):
+    def a_test_FileManager(self):
         pytest.main([FileManager_test.__file__])
     
-    def test_Result(self):
+    def a_test_Result(self):
         pytest.main([Result_test.__file__])
 
     def run_all_tests(self, include_performance=False, duration=False):

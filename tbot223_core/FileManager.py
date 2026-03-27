@@ -46,7 +46,7 @@ class FileManager:
 
         - list_of_files(dir_path, extensions=None, only_name=False) -> Result:
             List all files in a directory, optionally filtering by extensions.
-            
+
         - delete_file(file_path) -> Result:
             Delete a file.
 
@@ -56,15 +56,15 @@ class FileManager:
         - create_directory(dir_path) -> Result:
             Create a directory.
     """
-    
+
     # File locking threshold: files larger than this size will be locked during read operations
     LOCK_FILE_SIZE_THRESHOLD = 10 * 1024 * 1024  # 10 MB
 
     def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False,
                  base_dir: Union[str, Path]=None,
-                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None, 
+                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
                  log_instance: Optional[Log]=None, Utils_instance: Optional[Utils]=None):
-        
+
         # Initialize paths
         self._BASE_DIR = Path(base_dir) if base_dir is not None else Path.cwd()
 
@@ -83,8 +83,11 @@ class FileManager:
         self.log = log_instance or Log(logger=self.logger)
         self._utils = Utils_instance or Utils()
 
+        self._log("INFO", "FileManager initialized.")
+
+    def _log(self, level: str, message: str) -> None:
         if self.__is_logging_enabled__:
-            self.log.log_message("INFO", "FileManager initialized.")
+            self.log.log_message(level, message)
 
     # internal Methods
     @staticmethod
@@ -92,10 +95,10 @@ class FileManager:
         """
         Handle exceptions during file operations by changing file permissions and retrying.
         Args:
-            - func : The function to retry.
-            - path : The path to the file or directory.
-            - exc_info : Exception information.
-            
+            `func` : The function to retry.
+            `path` : The path to the file or directory.
+            `exc_info` : Exception information.
+
         Example:
             >>> file_manager._handle_exc(os.remove, "some/protected/file.txt", exc_info)
         """
@@ -110,7 +113,7 @@ class FileManager:
         Convert string path to Path object
 
         Args:
-            - path : The path to convert.
+            `path` : The path to convert.
 
         Returns:
             Path: The converted Path object.
@@ -123,15 +126,15 @@ class FileManager:
         if isinstance(path, Path):
             return path
         return self._utils.str_to_path(path).data
-    
+
     @staticmethod
     def _lock(file: Path, mode: int):
         """
         Lock a file using fcntl (Unix) or msvcrt (Windows).
 
         Args:
-            - file : The file object to lock.
-            - mode : The lock mode (fcntl.LOCK_EX, fcntl.LOCK_SH for Unix; msvcrt.LK_LOCK, msvcrt.LK_RLCK for Windows, 1 is lock, 0 is unlock).
+            `file` : The file object to lock.
+            `mode` : The lock mode (fcntl.LOCK_EX, fcntl.LOCK_SH for Unix; msvcrt.LK_LOCK, msvcrt.LK_RLCK for Windows, 1 is lock, 0 is unlock).
                 UNIX: 1 for LOCK_EX, 0 for LOCK_UN, 2 for LOCK_SH
                 WINDOWS: 1 for LK_LOCK, 0 for LK_UNLCK
 
@@ -156,7 +159,7 @@ class FileManager:
                 msvcrt.locking(file.fileno(), msvcrt.LK_LOCK, os.path.getsize(file.name))
             else:
                 msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, os.path.getsize(file.name))
-            
+
 
     def atomic_write(self, file_path: Union[str, Path], data: Any) -> Result:
         """
@@ -168,8 +171,8 @@ class FileManager:
         - Flush and sync data to disk before renaming to minimize data loss risk.
 
         Args:
-            - file_path : The path to the file where data will be written.
-            - data : The data to write to the file. Can be str or bytes.
+            `file_path` : The path to the file where data will be written.
+            `data` : The data to write to the file. Can be str or bytes.
 
         Returns:
             Result: A Result object indicating success or failure of the write operation.
@@ -181,11 +184,12 @@ class FileManager:
             >>> else:
             >>>     print(f"Write failed: {result.error_message}")
         """
+        temp_path = None
         try:
             file_path = self._str_to_path(file_path)
             if not file_path.parent.exists():
                 file_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             is_bytes = isinstance(data, bytes)
             mode = 'wb' if is_bytes else 'w'
             encoding = None if is_bytes else 'utf-8'
@@ -212,22 +216,18 @@ class FileManager:
                 temp.close()
                 replace_temp_with_target(temp_path, file_path)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully wrote to {file_path}")
+            self._log("INFO", f"Successfully wrote to {file_path}")
             return Result(True, None, None, f"Successfully wrote to {file_path}")
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to write to {file_path}: {e}")
+            self._log("ERROR", f"Failed to write to {file_path}: {e}")
             try:
-                if os.path.exists(temp_path):
+                if temp_path is not None and os.path.exists(temp_path):
                     os.unlink(temp_path)
-                    if self.__is_logging_enabled__:
-                        self.log.log_message("INFO", f"Temporary file {temp_path} deleted.")
+                    self._log("INFO", f"Temporary file {temp_path} deleted.")
             except Exception as ex:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Failed to delete temporary file {temp_path}: {ex}")
+                self._log("ERROR", f"Failed to delete temporary file {temp_path}: {ex}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def read_file(self, file_path: Union[str, Path], as_bytes: bool=False) -> Result:
         """
         Read the content of the file at "file_path"
@@ -237,9 +237,9 @@ class FileManager:
         - Use file locking to ensure safe read operations.
 
         Args:
-            - file_path : The path to the file to read.
-            - as_bytes : If True, read the file in binary mode.
-            
+            `file_path` : The path to the file to read.
+            `as_bytes` : If True, read the file in binary mode.
+
         Returns:
             Result: A Result object containing the file content in the data field.
 
@@ -266,18 +266,16 @@ class FileManager:
                     if lock:
                         self._lock(f, 0)
                 return content
-            
+
             with open(file_path, mode, encoding=encoding) as f:
                 content = safe_read(f, LOCK)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully read from {file_path}")
+            self._log("INFO", f"Successfully read from {file_path}")
             return Result(True, None, None, content)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to read from {file_path}: {e}")
+            self._log("ERROR", f"Failed to read from {file_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def write_json(self, file_path: Union[str, Path], data: Any, indent: int=4) -> Result:
         """
         Write JSON serializable "data" to "file_path" in JSON format
@@ -286,10 +284,10 @@ class FileManager:
         - Pretty-print JSON with specified indentation.
 
         Args:
-            - file_path : The path to the file where JSON data will be written.
-            - data : The JSON serializable data to write to the file.
-            - indent (int, optional): Number of spaces for indentation in the JSON file. Defaults to 4.
-        
+            `file_path` : The path to the file where JSON data will be written.
+            `data` : The JSON serializable data to write to the file.
+            `indent` (int, optional): Number of spaces for indentation in the JSON file. Defaults to 4.
+
         Returns:
             Result: A Result object indicating success or failure of the write operation.
 
@@ -307,15 +305,13 @@ class FileManager:
             write_result = self.atomic_write(file_path, json_data)
             if not write_result.success:
                 return write_result
-            
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully wrote JSON to {file_path}")
+
+            self._log("INFO", f"Successfully wrote JSON to {file_path}")
             return Result(True, None, None, f"Successfully wrote JSON to {file_path}")
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to write JSON to {file_path}: {e}")
+            self._log("ERROR", f"Failed to write JSON to {file_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def read_json(self, file_path: Union[str, Path]) -> Result:
         """
         Read JSON content from "file_path" and parse it into a Python object
@@ -323,7 +319,7 @@ class FileManager:
         - Return the parsed object in the data field of the Result object.
 
         Args:
-            - file_path : The path to the JSON file to read.
+            `file_path` : The path to the JSON file to read.
 
         Returns:
             Result: A Result object containing the parsed JSON data in the data field.
@@ -345,15 +341,13 @@ class FileManager:
             read_result = self.read_file(file_path)
             if not read_result.success:
                 return read_result
-            
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully read JSON from {file_path}")
+
+            self._log("INFO", f"Successfully read JSON from {file_path}")
             return Result(True, None, None, json.loads(read_result.data))
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to read JSON from {file_path}: {e}")
+            self._log("ERROR", f"Failed to read JSON from {file_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def list_of_files(self, dir_path: Union[str, Path], extensions: List[str]=None, only_name: bool = False) -> Result:
         """
         List all files in the directory at "dir_path"
@@ -363,10 +357,10 @@ class FileManager:
         - If only_name is True, return only file names instead of full paths.
 
         Args:
-            - dir_path : The path to the directory to list files from.
-            - extensions : List of file extensions to filter by. Defaults to None (no filtering).
-            - only_name : If True, return only file names instead of full paths. Defaults to False.
-            
+            `dir_path` : The path to the directory to list files from.
+            `extensions` : List of file extensions to filter by. Defaults to None (no filtering).
+            `only_name` : If True, return only file names instead of full paths. Defaults to False.
+
         Returns:
             Result: A Result object containing the list of file paths or names in the data field.
 
@@ -394,20 +388,18 @@ class FileManager:
                     continue
                 is_matching_file(item, files)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully listed files in {dir_path}")
+            self._log("INFO", f"Successfully listed files in {dir_path}")
             return Result(True, None, None, files)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to list files in {dir_path}: {e}")
+            self._log("ERROR", f"Failed to list files in {dir_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def exist(self, path: Union[str, Path]) -> Result:
         """
         Check if the file or directory at "path" exists
 
         Args:
-            - path : The path to the file or directory to check.
+            `path` : The path to the file or directory to check.
 
         Returns:
             Result: A Result object containing a boolean in the data field indicating existence.
@@ -426,14 +418,12 @@ class FileManager:
             path = self._str_to_path(path)
             exists = path.exists()
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Existence check for {path}: {exists}")
+            self._log("INFO", f"Existence check for {path}: {exists}")
             return Result(True, None, None, exists)
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to check existence for {path}: {e}")
+            self._log("ERROR", f"Failed to check existence for {path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def delete_file(self, file_path: Union[str, Path]) -> Result:
         """
         Delete the file at "file_path"
@@ -441,11 +431,11 @@ class FileManager:
         - If the file does not exist, raise FileNotFoundError.
 
         Args:
-            - file_path : The path to the file to delete.
+            `file_path` : The path to the file to delete.
 
         Returns:
             Result: A Result object indicating success or failure of the delete operation.
-        
+
         Example:
             >>> result = file_manager.delete_file("example.txt")
             >>> if result.success:
@@ -459,20 +449,17 @@ class FileManager:
                 raise FileNotFoundError(f"File not found: {file_path}")
             try:
                 file_path.unlink()
-            except PermissionError:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Permission denied when deleting {file_path}, attempting to change permissions and retry.")  
+            except PermissionError as e:
+                self._log("ERROR", f"Permission denied when deleting {file_path}, attempting to change permissions and retry.")
                 os.chmod(file_path, stat.S_IWRITE)
                 file_path.unlink()
-                
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully deleted {file_path}")
+
+            self._log("INFO", f"Successfully deleted {file_path}")
             return Result(True, None, None, f"Successfully deleted {file_path}")
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to delete {file_path}: {e}")
+            self._log("ERROR", f"Failed to delete {file_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def delete_directory(self, dir_path: Union[str, Path]) -> Result:
         """
         Delete the directory at "dir_path" and all its contents
@@ -480,8 +467,8 @@ class FileManager:
         - If the directory does not exist, raise FileNotFoundError.
 
         Args:
-            - dir_path : The path to the directory to delete.
-            
+            `dir_path` : The path to the directory to delete.
+
         Returns:
             Result: A Result object indicating success or failure of the delete operation.
 
@@ -502,21 +489,18 @@ class FileManager:
             try:
                 shutil.rmtree(dir_path)
             except PermissionError:
-                if self.__is_logging_enabled__:
-                    self.log.log_message("ERROR", f"Permission denied when deleting {dir_path}, attempting to change permissions and retry.")
+                self._log("ERROR", f"Permission denied when deleting {dir_path}, attempting to change permissions and retry.")
                 try:
                     shutil.rmtree(dir_path, onexc=self._handle_exc)
-                except:
+                except TypeError:
                     shutil.rmtree(dir_path, onerror=self._handle_exc)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully deleted directory {dir_path}")
+            self._log("INFO", f"Successfully deleted directory {dir_path}")
             return Result(True, None, None, f"Successfully deleted directory {dir_path}")
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to delete directory {dir_path}: {e}")
+            self._log("ERROR", f"Failed to delete directory {dir_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     def create_directory(self, dir_path: Union[str, Path]) -> Result:
         """
         Create the directory at "dir_path"
@@ -524,7 +508,7 @@ class FileManager:
         - If the directory already exists, do nothing.
 
         Args:
-            - dir_path : The path to the directory to create.
+            `dir_path` : The path to the directory to create.
 
         Returns:
             Result: A Result object indicating success or failure of the create operation.
@@ -540,17 +524,15 @@ class FileManager:
             dir_path = self._str_to_path(dir_path)
             dir_path.mkdir(parents=True, exist_ok=True)
 
-            if self.__is_logging_enabled__:
-                self.log.log_message("INFO", f"Successfully created directory {dir_path}")
+            self._log("INFO", f"Successfully created directory {dir_path}")
             return Result(True, None, None, f"Successfully created directory {dir_path}")
         except Exception as e:
-            if self.__is_logging_enabled__:
-                self.log.log_message("ERROR", f"Failed to create directory {dir_path}: {e}")
+            self._log("ERROR", f"Failed to create directory {dir_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
-        
+
     # __enter__ and __exit__
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         pass

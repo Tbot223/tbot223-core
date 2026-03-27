@@ -66,7 +66,7 @@ class TestExceptionTracker:
         assert "Python_Version" in tracker._system_info
 
     @Exception.ExceptionTrackerDecorator(mask_tuple=(False, False, False, False), tracker=Exception.ExceptionTracker())
-    def dummy_method(self, x: int) -> str:
+    def dummy_method(self, x: int) -> float:
         """
         A dummy method to test the ExceptionTrackerDecorator.
         """
@@ -118,7 +118,7 @@ class TestExceptionTracker:
         assert "ZeroDivisionError" in result.error
     
     @Exception.ExceptionTrackerDecorator(mask_tuple=(True, True, True, True), tracker=Exception.ExceptionTracker())
-    def dummy_method_masked(self, x: int) -> str:
+    def dummy_method_masked(self, x: int) -> float:
         """
         A dummy method to test the ExceptionTrackerDecorator with masking.
         """
@@ -163,8 +163,8 @@ class TestExceptionEdgeCases:
         
         # Should handle gracefully - may return failure but should not crash
         result = tracker.get_exception_location(error)
-        # The result should indicate failure since there's no traceback
-        assert result.success is False or "Unknown" in str(result.data) or result.data is not None
+        # The result should indicate failure since there's no traceback to extract
+        assert result.success is False
     
     def test_exception_info_all_system_fields(self, tracker: Exception.ExceptionTracker) -> None:
         """Test that all system info fields are present"""
@@ -431,12 +431,15 @@ class TestExceptionParamsValidation:
             assert result.success is False
 
     def test_get_exception_return_none_params(self, tracker: Exception.ExceptionTracker) -> None:
-        """Test get_exception_return rejects None params"""
+        """Test get_exception_return with None params uses default empty params"""
         try:
             1 / 0
         except ZeroDivisionError as e:
             result = tracker.get_exception_return(e, params=None, mask_tuple=(False, False, False, False))
+            # params=None is passed to get_exception_info which rejects it, 
+            # so data will be a traceback string instead of error_info dict
             assert result.success is False
+            assert isinstance(result.data, str), "data should be a traceback string when params validation fails in get_exception_info"
 
 
 @pytest.mark.usefixtures("tracker")
