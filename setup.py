@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='tbot223-core',
-    version='3.1.0',
+    version='3.1.1',
     description='Python utility library with Result pattern for consistent error handling, file operations, parallel execution, and logging.',
     long_description=long_description,
     long_description_content_type="text/markdown",

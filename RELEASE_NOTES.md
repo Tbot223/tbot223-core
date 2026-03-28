@@ -1,5 +1,13 @@
 # Release Notes
 
+## [3.1.1] - 2026-03-28
+
+### Fixed
+
+- **Utils**: Added missing `__init__.py` to `tbot223_core/Utils/` subpackage — `find_packages()` did not recognize `Utils/` as a Python package without it, causing `DecoratorUtils`, `Utils`, and `GlobalVars` to be entirely absent from the PyPI distribution
+
+---
+
 ## [3.1.0] - 2026-03-27
 
 ### Security
