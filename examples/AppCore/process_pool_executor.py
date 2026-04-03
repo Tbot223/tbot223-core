@@ -19,7 +19,9 @@ if __name__ == "__main__":
     tasks = [(divide, {"n": i+1, "m": i*2}) for i in range(TASK_COUNT)]
 
     # Execute tasks using process pool executor
-    results = ap.process_pool_executor(data=tasks, workers=2, override=False, timeout=1, chunk_size=512)
+    # chunk_size=None (default) runs the full task list in one executor.
+    # chunk_size=0 enables automatic chunking based on task count and workers.
+    results = ap.process_pool_executor(data=tasks, workers=2, override=False, timeout=1, chunk_size=0)
 
     # Check overall success and print results
     if results.success:

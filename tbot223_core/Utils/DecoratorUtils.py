@@ -8,11 +8,7 @@ from tbot223_core.Exception import ExceptionTracker
 
 class DecoratorUtils:
     """
-    This class provides utility decorators for various purposes.
-
-    Methods:
-        - count_runtime() -> function
-            Decorator to measure and print the execution time of a function.
+    Collection of lightweight decorator helpers.
     """
 
     
@@ -25,7 +21,7 @@ class DecoratorUtils:
     @staticmethod
     def count_runtime():
         """
-        Decorator to measure and print the execution time of a function
+        Return a decorator that prints how long a function takes to run.
         """
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             @wraps(func)

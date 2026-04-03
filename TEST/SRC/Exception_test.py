@@ -460,5 +460,16 @@ class TestExceptionDecoratorMetadata:
         assert self.named_decorated_function.__doc__ == "Docstring for named function."
 
 
+@pytest.mark.usefixtures("tracker")
+class TestExceptionInfoNoneError:
+    """Tests for get_exception_info when error argument is None"""
+
+    def test_get_exception_info_none_error(self, tracker: Exception.ExceptionTracker) -> None:
+        """Test get_exception_info rejects None as error"""
+        result = tracker.get_exception_info(error=None, params=((), {}), mask_tuple=(False, False, False, False))
+        assert result.success is False
+        assert "ValueError" in result.error
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

@@ -13,72 +13,23 @@ from tbot223_core.LogSys import LoggerManager, Log
 
 class GlobalVars:
     """
-    This class manages global variables in a controlled manner.
+    Manage process-wide variables with optional shared-memory synchronization.
 
-    Recommended usage:
-    - Beginners use explicit methods.
-    - Advanced users can use attribute access or call syntax.
+    `GlobalVars` supports three access styles:
+    - explicit method calls such as `set()` and `get()`
+    - attribute access such as `gv.api_key`
+    - call syntax such as `gv("api_key", "value")`
 
-    Methods:
-        - set(key: str, value: object, overwrite) -> Result
-            Set a global variable.
-
-        - get(key: str) -> Result
-            Get a global variable.
-
-        - delete(key: str) -> Result
-            Delete a global variable.
-
-        - clear() -> Result
-            Clear all global variables.
-
-        - list_vars() -> Result
-            List all global variables.
-
-        - exists(key: str) -> Result
-            Check if a global variable exists.
-
-        # internal Methods
-        - __getattr__(name)
-            Get a global variable by attribute access.
-
-        - __setattr__(name, value)
-            Set a global variable by attribute access.
-
-        - __call__(key: str, value: Optional[object], overwrite: bool) -> Result
-            Get or set a global variable using call syntax.
-
-        - __enter__() -> GlobalVars
-            Enter the runtime context related to this object. ( mutiprocess.RLock acquisition )
-
-        - __exit__(exc_type, exc_value, traceback) -> None
-            Exit the runtime context related to this object. ( mutiprocess.RLock release )
-
-        # shared memory Methods
-
-        - shm_cache_management(name: Optional[str], shm: Optional[shared_memory.SharedMemory]) -> Result
-            Internal method to manage shared memory cache.
-
-        - shm_gen(name: str, size: int) -> Result
-            Generate a shared memory object for global variables.
-
-        - shm_connect(name: str) -> Result
-            Connect to an existing shared memory object for global variables.
-
-        - shm_get(name: str) -> Result
-            Get the shared memory object by name.
-
-        - shm_close(name: str, close_only: bool = False) -> Result
-            Close a shared memory object for global variables.
-
-        - shm_update(name: str) -> Result
-            Update the current object's variables from the shared memory object.
-
-        - shm_sync(name: str) -> Result
-            Synchronize the current object's variables to the shared memory object.
-
-        - lock() -> RLock
-            Get the RLock object for synchronizing access to global variables.
+    Shared-memory support is designed for trusted cooperating processes and
+    includes lightweight ownership tracking:
+    - `shm_gen()` creates the shared memory block when possible and records the
+      current process as the owner.
+    - If the requested name already exists, `shm_gen()` attaches to the
+      existing block and verifies that the block is large enough.
+    - Processes that only attach with `shm_connect()` should typically close
+      their handle with `shm_close(name, close_only=True)`.
+    - Cache eviction closes old handles but does not automatically unlink owned
+      shared memory. Call `shm_close()` explicitly when cleanup matters.
 
     Example:
         >>> globals = GlobalVars()
@@ -100,19 +51,18 @@ class GlobalVars:
         >>> print(globals("api_key").data)  # Output: 12345
 
     Security:
-    - The shared-memory methods ('shm_sync', 'shm_update', etc.) support two
-        serialization formats: 'json' (default) and 'pickle'.
-    - JSON: Safe for most use cases but has limitations (cannot serialize
-        all Python objects like custom classes, functions, etc.).
-    - PICKLE: Unpickling untrusted data can execute arbitrary code. Use pickle
-        serialization only between trusted processes with non-JSON-serializable data.
-    - To use pickle serialization for trusted processes:
+    - Shared-memory methods such as `shm_sync()` and `shm_update()` support
+      two serialization formats: `json` (default) and `pickle`.
+    - `json` is the safer default, but it cannot serialize every Python object.
+    - `pickle` can execute arbitrary code when deserializing untrusted data.
+      Use it only when all participating processes are trusted.
+    - For trusted processes that need pickle:
         >>> gv.shm_sync("my_shm", serialize_format="pickle")
         >>> gv.shm_update("my_shm", serialize_format="pickle")
-    - Always validate and verify data integrity when using shared memory with
-        untrusted processes, regardless of serialization format.
 
     """
+
+    _MISSING = object()
 
     def __init__(self, is_logging_enabled: bool=False, base_dir: Union[str, Path]=None,
                  shared_memory_cache_max_size: int=5,
@@ -142,6 +92,7 @@ class GlobalVars:
 
         # Shared Memory Attributes
         self.__shm_name__ = set()
+        self.__shm_owner__ = set()
         self.__shm_cache__ = {}
         self.__shm_cache_max_size__ = shared_memory_cache_max_size
 
@@ -185,11 +136,11 @@ class GlobalVars:
         """
         try:
             with self.__lock__:
+                if key is None or not isinstance(key, str) or key.strip() == "":
+                    raise ValueError("key must be a non-empty string.")
                 # inline existence check to avoid extra lock/log overhead from exists()
                 if key in self.__vars__ and not overwrite:
                     raise KeyError(f"Global variable '{key}' already exists.")
-                if key is None or not isinstance(key, str) or key.strip() == "":
-                    raise ValueError("key must be a non-empty string.")
 
                 self.__vars__[key] = value
                 self._log("INFO", f"Global variable '{key}' set.")
@@ -278,8 +229,7 @@ class GlobalVars:
         """
         try:
             with self.__lock__:
-                for name in list(self.__vars__.keys()):
-                    del self.__vars__[name]
+                self.__vars__.clear()
 
                 self._log("INFO", "All global variables cleared.")
                 return Result(True, None, None, "All global variables cleared.")
@@ -361,15 +311,15 @@ class GlobalVars:
                 if name not in vars_dict:
                     raise KeyError(name)
                 return vars_dict[name]
-        except KeyError:
-            return "Key does not exist."
+        except KeyError as exc:
+            raise AttributeError(f"'{type(self).__name__}' object has no variable '{name}'") from exc
         except Exception as e:
             try:
                 if object.__getattribute__(self, '__is_logging_enabled__'):
                     object.__getattribute__(self, 'log').log_message("ERROR", f"Failed to access variable '{name}': {e}")
             except Exception:
                 pass
-            return object.__getattribute__(self, '_exception_tracker').get_exception_return(e)
+            raise
 
     def __setattr__(self, name: str, value: object) -> Union[None, Result]:
         """
@@ -411,14 +361,15 @@ class GlobalVars:
             exception_tracker = object.__getattribute__(self, '_exception_tracker')
             return exception_tracker.get_exception_return(e)
 
-    def __call__(self, key: str, value: Optional[object]=None, overwrite: bool=False) -> Result:
+    def __call__(self, key: str, value: object=_MISSING, overwrite: bool=False) -> Result:
         """
         Get or set a global variable using call syntax.
         If value is provided, set the variable; otherwise, get it.
 
         Args:
             `key` : The name of the global variable.
-            `value` : The value to set (optional).
+            `value` : The value to set. If omitted, this method performs a get operation.
+                `None` is treated as a valid value and will be stored.
             `overwrite` : If True, overwrite existing variable when setting. Defaults to False.
 
         Returns:
@@ -434,7 +385,7 @@ class GlobalVars:
             >>>     print(result.error)
         """
         try:
-            if value is not None:
+            if value is not self._MISSING:
                 return self.set(key, value, overwrite)
             else:
                 return self.get(key)
@@ -443,17 +394,20 @@ class GlobalVars:
 
     def shm_cache_management(self, name: Optional[str], shm: Optional[shared_memory.SharedMemory]) -> Result:
         """
-        Internal method to manage shared memory cache.
+        Maintain the internal shared-memory handle cache.
 
-        Security: This method manages shared memory cache; shared-memory data
-        may be serialized by other methods using pickle or json format.
-        Use json format (serialize_format="json") for untrusted processes.
+        This helper stores active `SharedMemory` handles, refreshes access
+        order, and evicts the oldest cached handle when the cache limit is
+        reached. Eviction closes the handle but does not automatically unlink
+        the shared memory block.
 
         Args:
-            `name` : The name of the shared memory object.
-            `shm` : The shared memory object.
-            if name and shm are provided, it adds/updates the cache.
-            if both are None, it clears the cache.
+            `name` : Shared memory name, or `None` when clearing the cache.
+            `shm` : Shared memory handle to cache, or `None`.
+                - If both `name` and `shm` are provided, the cache entry is
+                  added or refreshed.
+                - If both are `None`, all cached handles are closed and the
+                  cache is cleared.
 
         Returns:
             Result: A Result object indicating success or failure.
@@ -461,13 +415,7 @@ class GlobalVars:
         Example:
             >>> gv = GlobalVars()
             >>> shm = shared_memory.SharedMemory(name="my_shm")
-            >>> gv.__shm_cache_management__("my_shm", shm)
-            >>> # Manages the shared memory cache for "my_shm".
-            >>>
-            >>> for i in range(6):
-            >>>     shm = shared_memory.SharedMemory(name=f"shm_{i}")
-            >>>     gv.__shm_cache_management__(f"shm_{i}", shm)
-            >>> # The cache will only keep the 5 most recent shared memory objects.
+            >>> gv.shm_cache_management("my_shm", shm)
         """
         try:
             if name is not None and not isinstance(name, str):
@@ -475,11 +423,19 @@ class GlobalVars:
             if shm is not None and not isinstance(shm, shared_memory.SharedMemory):
                 raise ValueError("shm must be a shared_memory.SharedMemory object or None")
             with self.__lock__:
-                if len(self.__shm_cache__) >= self.__shm_cache_max_size__:
+                should_add_new = name is not None and shm is not None and name not in self.__shm_cache__
+                if should_add_new and len(self.__shm_cache__) >= self.__shm_cache_max_size__:
                     oldest_key = next(iter(self.__shm_cache__))
-                    self.__shm_cache__[oldest_key].close()
-                    del self.__shm_cache__[oldest_key]
-                    self._log("INFO", f"Shared memory cache for '{oldest_key}' removed due to cache size limit.")
+                    oldest_shm = self.__shm_cache__.pop(oldest_key)
+                    oldest_shm.close()
+                    if oldest_key in self.__shm_owner__:
+                        self._log(
+                            "WARNING",
+                            f"Shared memory '{oldest_key}' evicted from cache. "
+                            "Call shm_close() explicitly to unlink if this process is the owner."
+                        )
+                    else:
+                        self._log("INFO", f"Shared memory cache for '{oldest_key}' removed due to cache size limit.")
 
                 if name not in self.__shm_cache__ and shm is not None:
                     self.__shm_cache__[name] = shm
@@ -488,6 +444,8 @@ class GlobalVars:
                     self.__shm_cache__[name] = shm
                     self._log("INFO", f"Shared memory cache for '{name}' updated.")
                 elif name is None and shm is None:
+                    for cached_shm in self.__shm_cache__.values():
+                        cached_shm.close()
                     self.__shm_cache__.clear()
                     self._log("INFO", "All shared memory caches cleared.")
                 else:
@@ -503,37 +461,28 @@ class GlobalVars:
 
     def shm_gen(self, name: str=None, size: int=1024, create_lock: bool=True) -> Result:
         """
-        Generate a shared memory object for inter-process communication.
-        Recommended to use a Lock for safe access across processes.
+        Create or attach to a shared-memory block for inter-process use.
 
-        Security: The shared memory object may be used to store data serialized
-        with pickle (default) or json. For untrusted processes, use json format:
-        >>> gv.shm_sync("name", serialize_format="json")
+        When the named block does not exist, this method creates it and marks
+        the current process as the owner. If the name already exists, the
+        method attaches to the existing block instead and verifies that the
+        block is large enough for the requested size.
 
         Args:
-            `name` : The name of the shared memory object.
-            `size` : The size of the shared memory object in bytes.
-            `create_lock` : If True, create a multiprocessing.Lock for inter-process synchronization.
+            `name` : Shared memory name.
+            `size` : Requested size in bytes.
+            `create_lock` : If `True`, also create a `multiprocessing.Lock`
+                for cross-process synchronization.
 
         Returns:
             Result: A Result object.
-            - If create_lock is False: data contains a success message.
-            - If create_lock is True: data contains the multiprocessing.Lock object.
-              (This lock must be passed to child processes before fork/spawn for synchronization)
+            - If `create_lock` is `False`, `data` contains a success message.
+            - If `create_lock` is `True`, `data` contains the generated lock.
 
         Example:
-            >>> # Without lock (default)
             >>> gv.shm_gen("my_shm", size=4096)
-            >>>
-            >>> # With lock for inter-process synchronization
             >>> result = gv.shm_gen("my_shm", size=4096, create_lock=True)
-            >>> shm_lock = result.data  # Pass this to child processes
-            >>>
-            >>> # In child process, use the lock:
-            >>> with shm_lock:
-            >>>     gv.shm_update("my_shm")
-            >>>     # ... modify ...
-            >>>     gv.shm_sync("my_shm")
+            >>> shm_lock = result.data
         """
         try:
             if name is None or not isinstance(name, str) or name.strip() == "":
@@ -543,8 +492,13 @@ class GlobalVars:
 
             try:
                 shm = shared_memory.SharedMemory(create=True, size=size, name=name)
+                self.__shm_owner__.add(name)
             except FileExistsError:
+                self._log("WARNING", f"Shared memory '{name}' already exists. Connecting to existing one.")
                 shm = shared_memory.SharedMemory(name=name)
+                if shm.size < size:
+                    shm.close()
+                    raise ValueError(f"Existing SHM '{name}' size ({shm.size}) < requested ({size})")
             self.__shm_name__.add(name)
             self.shm_cache_management(name, shm)  # Keep reference to prevent GC
             self._log("INFO", f"Shared memory object '{shm.name}' created.")
@@ -559,15 +513,14 @@ class GlobalVars:
 
     def shm_connect(self, name: str) -> Result:
         """
-        Connect to an existing shared memory object (for child processes).
-        Unlike shm_gen, this method only connects to existing shared memory
-        and does not create new one or Lock.
+        Attach to an existing shared-memory block without creating ownership.
 
-        Security: Connected shared memory may contain pickle or json serialized data.
-        Ensure you use the same serialization format when calling shm_sync/shm_update.
+        This method is intended for child or worker processes. Unlike
+        `shm_gen()`, it never creates a new block and does not record the
+        current process as the owner.
 
         Args:
-            `name` : The name of the existing shared memory object.
+            `name` : Shared memory name.
 
         Returns:
             Result: A Result object indicating success or failure.
@@ -580,7 +533,7 @@ class GlobalVars:
             >>>
             >>> # In child process:
             >>> gv_child = GlobalVars()
-            >>> gv_child.shm_connect("my_shm")  # Connect to existing shm
+            >>> gv_child.shm_connect("my_shm")
             >>> with shm_lock:
             >>>     gv_child.shm_update("my_shm")
             >>>     # ... modify ...
@@ -605,16 +558,13 @@ class GlobalVars:
 
     def shm_get(self, name: str) -> Result:
         """
-        Get an existing shared memory object by name.
-
-        Security: Retrieved shared memory may contain pickle or json serialized data.
-        Use json format for safer inter-process communication with untrusted sources.
+        Return a cached shared-memory handle, or attach to it if needed.
 
         Args:
-            `name` : The name of the shared memory object.
+            `name` : Shared memory name.
 
         Returns:
-            shared_memory.SharedMemory: The existing shared memory object.
+            Result: A Result object containing the `SharedMemory` handle.
 
         Example:
             >>> gv = GlobalVars()
@@ -638,16 +588,16 @@ class GlobalVars:
 
     def shm_sync(self, name: str, serialize_format: str="json") -> Result:
         """
-        Synchronize the current object's variables to the shared memory object.
+        Serialize the current variables and write them into shared memory.
 
-        Security: This method supports 'json' (default) and 'pickle' serialization.
-        - json: Safe and recommended for most use cases (cannot serialize custom classes, functions, etc.)
-        - pickle: Fast but dangerous with untrusted data (arbitrary code execution)
-        For trusted processes with non-JSON-serializable data, use serialize_format="pickle".
+        Supported formats:
+        - `json` (default): safer, but limited to JSON-serializable values
+        - `pickle`: more flexible, but unsafe for untrusted data
 
         Args:
-            `name` : The name of the shared memory object.
-            `serialize_format` : The serialization format to use. Default is "json". ("json" or "pickle")
+            `name` : Shared memory name.
+            `serialize_format` : Serialization format. Must be `"json"` or
+                `"pickle"`.
 
         Returns:
             Result: A Result object indicating success or failure.
@@ -692,16 +642,14 @@ class GlobalVars:
 
     def shm_update(self, name: str, serialize_format: str="json") -> Result:
         """
-        Update the current object's variables from the shared memory object.
+        Read serialized data from shared memory and merge it into this object.
 
-        Security: This method supports 'json' (default) and 'pickle' deserialization.
-        - json: Safe and recommended; use the same format that was used in shm_sync().
-        - pickle: Dangerous with untrusted data (can execute arbitrary code)
-        Always use the same format that was used in shm_sync().
+        Use the same `serialize_format` that was used with `shm_sync()`.
 
         Args:
-            `name` : The name of the shared memory object.
-            `serialize_format` : The serialization format to use. Default is "json". ("json" or "pickle")
+            `name` : Shared memory name.
+            `serialize_format` : Serialization format. Must match the format
+                used when the data was written.
 
         Returns:
             Result: A Result object indicating success or failure.
@@ -747,11 +695,18 @@ class GlobalVars:
 
     def shm_close(self, name: str, close_only: bool = False) -> Result:
         """
-        Close and unlink the shared memory object.
+        Close a shared-memory handle and optionally unlink the block.
+
+        Ownership matters:
+        - The owner process can call `shm_close(name)` to close and unlink.
+        - Non-owner processes should usually call
+          `shm_close(name, close_only=True)`.
+        - If a non-owner calls `shm_close(name)` without `close_only=True`,
+          the handle is closed but the block is not unlinked.
 
         Args:
-            `name` : The name of the shared memory object.
-            `close_only` : If True, only close the shared memory without unlinking it.
+            `name` : Shared memory name.
+            `close_only` : If `True`, close only the local handle.
 
         Returns:
             Result: A Result object indicating success or failure.
@@ -766,12 +721,18 @@ class GlobalVars:
                 raise ValueError("Shared memory name does not match the created one.")
             shm = self.shm_get(name).data
             shm.close()
-            if not close_only:
+            if not close_only and name in self.__shm_owner__:
                 shm.unlink()
                 self.__shm_name__.discard(name)
+                self.__shm_owner__.discard(name)
+                self._log("INFO", f"Shared memory object '{name}' closed and unlinked.")
+            elif not close_only:
+                self.__shm_name__.discard(name)
+                self._log("WARNING", f"Shared memory object '{name}' closed without unlink because this process is not the owner.")
+            else:
+                self._log("INFO", f"Shared memory object '{name}' closed.")
             self.__shm_cache__.pop(name, None)
 
-            self._log("INFO", f"Shared memory object '{name}' closed and unlinked.")
             return Result(True, None, None, "success to close shared memory object")
         except Exception as e:
             self._log("ERROR", f"Failed to close shared memory object '{name}': {e}")
@@ -779,14 +740,12 @@ class GlobalVars:
 
     def lock(self) -> RLock: # type: ignore
         """
-        Get the RLock object for synchronizing access to global variables.
-
-        Args:
-            None
+        Return the `RLock` used to guard this instance's state.
 
         Returns:
             multiprocessing.RLock: The RLock object.
-            (For the user's convenience, this function does not specifically use the Result pattern.)
+            This method intentionally returns the lock directly instead of using
+            the `Result` wrapper.
 
         Example:
             >>> gv = GlobalVars()

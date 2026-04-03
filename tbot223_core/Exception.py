@@ -12,19 +12,14 @@ from tbot223_core.Result import Result
 
 class ExceptionTracker():
     """
-    The ExceptionTracker class provides functionality to track location information when exceptions occur and return related information.
+    Collect structured exception information and return it in the project's
+    `Result` format.
 
-    1. Exception Location Tracking: Provides functionality to track where exceptions occur and return related information.
-        - get_exception_location: Returns the location where the exception occurred.
-
-    2. Exception Information Tracking: Provides functionality to track exception information and return related information.
-        - get_exception_info: Returns information about the exception.
-
-    3. Exception Return Standardization: Provides a convenience function to standardize the return of exception information.
-        - get_exception_return: Standardizes the return of exception information.
-
-    4. Predefined Error Code Retrieval: Provides functionality to get a predefined error code based on the exception type.
-        - get_error_code: Returns a predefined error code for the exception type.
+    Main responsibilities:
+    - locate where an exception occurred
+    - build a detailed error information payload
+    - standardize exception returns for callers
+    - map exception types to user-defined error codes
     """
 
     def __init__(self):
@@ -49,14 +44,15 @@ class ExceptionTracker():
     # L1 Methods
     def get_exception_location(self, error: Exception) -> Result:
         """
-        Function to track where exceptions occurred and return related information
+        Return the source location for an exception.
 
         Args:
             `error` (Exception): The exception object to track.
 
         Returns:
-            Result: A Result object containing the location information where the exception occurred.
-                - Format (str): '{file}', line {line}, in {function}'
+            Result: A Result object containing the location where the
+                exception occurred.
+                - Format (str): `'{file}', line {line}, in {function}`
 
         Example:
             >>> try:
@@ -77,25 +73,30 @@ class ExceptionTracker():
 
     def get_exception_info(self, error: Exception, user_input: Any=None, params: Tuple[Tuple, dict]=None, mask_tuple: Tuple[bool, ...] = ()) -> Result:
         """
-        Function to track exception information and return related information
+        Build a detailed error information payload for an exception.
 
-        The error data dict includes traceback, location information, occurrence time, input context, etc.
-        If masking is True, computer information will be masked.
+        The returned payload includes traceback, location information,
+        timestamp, input context, and cached system information.
 
         Args:
             `error` : The exception object to track.
             `user_input` : User input context related to the exception. Defaults to None.
-            `params` : Additional parameters related to the exception. Defaults to None. expected format: (args, kwargs)
-            `mask_tuple` : A tuple of booleans indicating which parts of the error information to mask. Defaults to an empty tuple.
+            `params` : Additional call context related to the exception.
+                Expected format: `(args, kwargs)`.
+            `mask_tuple` : A tuple of booleans indicating which parts of the
+                error information should be masked.
 
         Note:
-            The mask_tuple should be in the order of ("user_input", "params", "traceback", "computer_info").
-            If an element in the tuple is True, the corresponding part of the error information will be masked.
-            e.g., mask_tuple = (True, False, True, False) will mask "user_input" and "traceback".
+            `mask_tuple` should follow this order:
+            `("user_input", "params", "traceback", "computer_info")`.
+            If an element is `True`, the corresponding field is masked.
+            For example, `(True, False, True, False)` masks
+            `user_input` and `traceback`.
 
         Returns:
-            Result: A Result object containing detailed information about the exception.
-                - data (dict): A dictionary containing detailed exception information. ( Please see Readme.md for more details on the structure of error_info )
+            Result: A Result object containing a detailed exception payload.
+                - `data` (dict): Structured exception information. See the
+                  project README for the full `error_info` structure.
 
         Example:
             >>> try:
@@ -105,9 +106,9 @@ class ExceptionTracker():
             >>>     # This will raise a ZeroDivisionError
             >>>     divide(a, b)
             >>> except Exception as e:
-            >>>     info_result = tracker.get_exception_info(e, user_input="Divide operation", params=((a, b), {"a":a, "b":b}), mask_tuple=(False, False, False, False))
+            >>>     info_result = tracker.get_exception_info(e, user_input="Divide operation", params=((a, b), {"a": a, "b": b}), mask_tuple=(False, False, False, False))
             >>>     print(info_result.data)
-            >>> # Output: ( error_info dict, see Readme.md for structure )
+            >>> # Output: structured error_info dictionary
         """
         try:
             if error is None:
@@ -162,26 +163,28 @@ class ExceptionTracker():
     # L2 Methods
     def get_exception_return(self, error: Exception, user_input: Any=None, params: Tuple[Tuple, dict]=((), {}), mask_tuple: Tuple[bool, ...]=()) -> Result:
         """
-        A convenience function to standardize the return of exception information. It's designed to be used in exception handling blocks.
-        ( Includes exception type, message, location, and detailed info. )
+        Build a standardized failure `Result` from an exception.
 
-        I recommend that the caller return the return value of this function as is.
-
-        If masking is True, Exception information will be masked.
+        This helper is intended for direct use inside `except` blocks.
 
         Args:
             `error` : The exception object to track.
             `user_input` : User input context related to the exception. Defaults to None.
-            `params` : Additional parameters related to the exception. Defaults to None. expected format: (args, kwargs)
-            `mask_tuple` : A tuple of booleans indicating which parts of the error information to mask. Defaults to an empty tuple.
+            `params` : Additional call context related to the exception.
+                Expected format: `(args, kwargs)`.
+            `mask_tuple` : A tuple of booleans indicating which parts of the
+                error information should be masked.
 
         Note:
-            The mask_tuple should be in the order of ("user_input", "params", "traceback", "computer_info").
-            If an element in the tuple is True, the corresponding part of the error information will be masked.
-            e.g., mask_tuple = (True, False, True, False) will mask "user_input" and "traceback".
+            `mask_tuple` should follow this order:
+            `("user_input", "params", "traceback", "computer_info")`.
+            If an element is `True`, the corresponding field is masked.
+            For example, `(True, False, True, False)` masks
+            `user_input` and `traceback`.
 
         Returns:
-            Result: A dictionary containing detailed information about the exception.
+            Result: A standardized failure `Result` containing exception
+                details in `data`.
 
         Example:
             >>> try:
@@ -200,7 +203,7 @@ class ExceptionTracker():
 
     def get_error_code(self, error_id_map: dict, error: Exception) -> Result:
         """
-        Function to get a predefined error code based on the exception type.
+        Return a user-defined error code for a given exception type.
 
         Args:
             `error_id_map` (dict): A dictionary mapping exception type names (str) to error
@@ -208,15 +211,17 @@ class ExceptionTracker():
             `error` (Exception): The exception object to get the error code for.
 
         Note:
-            `error_id_map` is yourself defined mapping table.
-            e.g., { "ZeroDivisionError": 1001, "ValueError": 1002, ... }
-            Why -> To allow users to define their own error codes for different exception types.
-            Error codes wull very from project to project.
-            Error codes can be of any type (int, str, etc.) as per user requirement.
+            `error_id_map` is a user-defined mapping table.
+            Example:
+            `{ "ZeroDivisionError": 1001, "ValueError": 1002, ... }`
+            This allows each project to define its own exception codes.
+            Codes may be any type that fits the project's needs, such as
+            `int` or `str`.
 
         Returns:
-            Result: A Result object containing the error code if found.
-                - If the exception type is not found in the error_id_map, returns a Result with success=False and an appropriate error message.
+            Result: A Result object containing the mapped error code.
+                If the exception type is not present in `error_id_map`,
+                the method returns `success=False`.
 
         Example:
             >>> error_id_map = {
@@ -242,18 +247,21 @@ class ExceptionTracker():
 
 class ExceptionTrackerDecorator():
     """
-    Decorator for wrapping functions with ExceptionTracker.
+    Decorator that wraps a function with `ExceptionTracker`.
 
-    - Tracks exceptions and returns a safe value via ExceptionTracker.
-    - Use only for non-critical functions (adds overhead).
-    - Not suitable if logging or side effects are required.
+    - Converts uncaught exceptions into standardized `Result` objects.
+    - Best suited for non-critical convenience wrappers because it adds
+      tracking overhead.
+    - Not ideal when the caller depends on side effects such as custom
+      logging or cleanup behavior.
 
     Args:
-        `mask_tuple` : A tuple indicating which exception details to mask. Defaults to (False, False, False, False).
-            - If True, the corresponding detail will be masked. (user_input, params, traceback, computer_info)
-            - If False, the detail will be shown.
-            - If make mistake in format, defaults to (False, False, False, False).
-        `tracker` : An instance of ExceptionTracker to use. If None, a new instance will be created. Defaults to None.
+        `mask_tuple` : A tuple indicating which exception details to mask.
+            Defaults to `(False, False, False, False)`.
+            Order: `(user_input, params, traceback, computer_info)`.
+            If the format is invalid, the default tuple is used instead.
+        `tracker` : An `ExceptionTracker` instance to reuse. If omitted, a new
+            instance is created.
 
     Returns:
         If no exception occurs, returns the original function's return value.

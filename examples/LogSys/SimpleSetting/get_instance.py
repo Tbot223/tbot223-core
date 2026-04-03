@@ -4,7 +4,7 @@ import logging
 
 # Define base directory for logs
 BASE_DIR = Path(__file__).parents[2] / ".OtherFiles" / "logs"
-SECOND_LOG_DIR = BASE_DIR / "SimpleSetting" # Subdirectory for this example
+SECOND_LOG_DIR = "SimpleSetting"  # Subdirectory for this example
 
 if __name__ == "__main__":
     # Initialize with Simple Settings

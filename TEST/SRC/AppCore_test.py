@@ -187,9 +187,9 @@ class TestAppCoreXfail:
         assert wrong_timeout_result.success is False
         assert "timeout must be a positive number" in wrong_timeout_result.error
 
-        wrong_chunk_size_result = test_appcore_initialization.process_pool_executor([(self._dummy_task, {"x" : 1})], workers=4, override=True, timeout=1, chunk_size=0)
+        wrong_chunk_size_result = test_appcore_initialization.process_pool_executor([(self._dummy_task, {"x" : 1})], workers=4, override=True, timeout=1, chunk_size=-1)
         assert wrong_chunk_size_result.success is False
-        assert "chunk_size must be a positive integer" in wrong_chunk_size_result.error
+        assert "chunk_size must be 0 or a positive integer" in wrong_chunk_size_result.error
 
 @pytest.mark.usefixtures("tmp_path", "test_appcore_initialization", "helper_methods")
 class TestAppCoreEdgeCases:
@@ -199,11 +199,49 @@ class TestAppCoreEdgeCases:
 
         Each task runs the _metrix_task function with increasing n and m values.
         The results are verified to ensure all tasks completed successfully.
-        22 tasks are used to test edge case with small number of tasks.
+        The default behavior should submit the full task list in a single executor.
         """
         tasks = [(helper_methods.metrix_task, {"n": i+1, "m": i+1}) for i in range(25)]
         results = test_appcore_initialization.process_pool_executor(tasks, workers=4, override=False, timeout=5)
         helper_methods.verify_results(results.data, expected_count=25)
+
+    def test_process_pool_executor_no_chunk_uses_single_batch(self, test_appcore_initialization: AppCore, helper_methods: HelperMethods, monkeypatch) -> None:
+        """Test default process pool execution uses a single executor batch."""
+        from tbot223_core.Result import Result
+
+        tasks = [(helper_methods.dummy_task, {"x": i}) for i in range(10)]
+        call_sizes = []
+
+        def fake_generic(data, workers, timeout, type):
+            call_sizes.append(len(data))
+            return [Result(True, None, None, True) for _ in data]
+
+        monkeypatch.setattr(test_appcore_initialization, "_generic_executor", fake_generic)
+
+        results = test_appcore_initialization.process_pool_executor(tasks, workers=4, override=False, timeout=5)
+
+        assert results.success, f"process_pool_executor default batch failed: {results.error}"
+        assert call_sizes == [10]
+        assert len(results.data) == 10
+
+    def test_process_pool_executor_auto_chunk_zero(self, test_appcore_initialization: AppCore, helper_methods: HelperMethods, monkeypatch) -> None:
+        """Test chunk_size=0 enables automatic chunk calculation."""
+        from tbot223_core.Result import Result
+
+        tasks = [(helper_methods.dummy_task, {"x": i}) for i in range(10)]
+        call_sizes = []
+
+        def fake_generic(data, workers, timeout, type):
+            call_sizes.append(len(data))
+            return [Result(True, None, None, True) for _ in data]
+
+        monkeypatch.setattr(test_appcore_initialization, "_generic_executor", fake_generic)
+
+        results = test_appcore_initialization.process_pool_executor(tasks, workers=4, override=False, timeout=5, chunk_size=0)
+
+        assert results.success, f"process_pool_executor auto chunk failed: {results.error}"
+        assert call_sizes == [3, 3, 3, 1]
+        assert len(results.data) == 10
 
     def test_get_text_by_lang_unsupported_lang(self, test_appcore_initialization: AppCore) -> None:
         """Test get_text_by_lang with unsupported language falls back to default"""
@@ -248,6 +286,22 @@ class TestAppCoreEdgeCases:
         results = test_appcore_initialization.thread_pool_executor(tasks, workers=10, override=True, timeout=5)
         assert results.success, f"thread_pool_executor with override failed: {results.error}"
 
+    def test_thread_pool_executor_workers_none_runtime_default(self, test_appcore_initialization: AppCore, helper_methods: HelperMethods, monkeypatch) -> None:
+        """Test thread_pool_executor resolves workers at runtime when omitted."""
+        monkeypatch.setattr("os.cpu_count", lambda: None)
+        tasks = [(helper_methods.dummy_task, {"x": 1})]
+        results = test_appcore_initialization.thread_pool_executor(tasks, workers=None, override=False, timeout=5)
+        assert results.success, f"thread_pool_executor with workers=None failed: {results.error}"
+        assert len(results.data) == 1
+
+    def test_process_pool_executor_workers_none_runtime_default(self, test_appcore_initialization: AppCore, helper_methods: HelperMethods, monkeypatch) -> None:
+        """Test process_pool_executor resolves workers at runtime when omitted."""
+        monkeypatch.setattr("os.cpu_count", lambda: None)
+        tasks = [(helper_methods.metrix_task, {"n": 1, "m": 1})]
+        results = test_appcore_initialization.process_pool_executor(tasks, workers=None, override=False, timeout=5)
+        assert results.success, f"process_pool_executor with workers=None failed: {results.error}"
+        assert len(results.data) == 1
+
     # I WILL ADD MORE EDGE CASE TESTS HERE IN THE FUTURE
 
 @pytest.mark.usefixtures("tmp_path", "test_appcore_initialization")
@@ -277,6 +331,46 @@ class TestCLIMethods:
         cmd = f"from tbot223_core import AppCore; app = AppCore(is_logging_enabled=False, base_dir={str(test_base_dir)}); app.restart_application()"
         proc = subprocess.run(["python", "-c", cmd], capture_output=True)
         assert proc.returncode in [0, 1, 2]  # Environment dependent, it may return different codes
+
+    def test_clear_console_failure(self, test_appcore_initialization: AppCore, monkeypatch) -> None:
+        """Test clear_console failure path with subprocess run exception"""
+        import subprocess as sp
+
+        def raise_error(*args, **kwargs):
+            raise sp.CalledProcessError(1, "clear")
+
+        monkeypatch.setattr(sp, "run", raise_error)
+
+        result = test_appcore_initialization.clear_console()
+
+        assert not result.success
+        assert "CalledProcessError" in result.error
+
+    def test_clear_console_uses_shell_false(self, test_appcore_initialization: AppCore, monkeypatch) -> None:
+        """Test clear_console uses subprocess without shell=True."""
+        import subprocess as sp
+
+        captured = {}
+
+        def fake_run(command, shell, check):
+            captured["command"] = command
+            captured["shell"] = shell
+            captured["check"] = check
+
+        monkeypatch.setattr(sp, "run", fake_run)
+
+        result = test_appcore_initialization.clear_console()
+
+        assert result.success
+        assert captured["shell"] is False
+        assert captured["check"] is True
+        assert isinstance(captured["command"], list)
+
+    def test_chunk_list(self, test_appcore_initialization: AppCore) -> None:
+        """Test internal _chunk_list helper for correct chunk splits"""
+        data = list(range(10))
+        chunks = list(test_appcore_initialization._chunk_list(data, 3))
+        assert chunks == [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
 
 @pytest.mark.usefixtures("tmp_path", "test_appcore_initialization", "helper_methods")
 class TestAppCorePerformance:
@@ -614,6 +708,62 @@ class TestSafeCLIInput:
             assert result.success is True
             # Python's bool('True') is True, bool('') is False
             assert result.data is True
+
+    def test_safe_cli_input_bool_false_values(self, test_appcore_initialization: AppCore) -> None:
+        """Test bool type conversion for various False-like values"""
+        from unittest.mock import patch
+        
+        for false_val in ['false', 'f', 'no', 'n', '0', 'off', 'disable', 'disabled']:
+            with patch('builtins.input', return_value=false_val):
+                result = test_appcore_initialization.safe_CLI_input(
+                    prompt="Enter bool: ",
+                    input_type=bool
+                )
+                assert result.success is True, f"Bool conversion failed for '{false_val}'"
+                assert result.data is False, f"'{false_val}' should convert to False"
+
+    def test_safe_cli_input_bool_true_values(self, test_appcore_initialization: AppCore) -> None:
+        """Test bool type conversion for various True-like values"""
+        from unittest.mock import patch
+        
+        for true_val in ['true', 't', 'yes', 'y', '1', 'on', 'enable', 'enabled']:
+            with patch('builtins.input', return_value=true_val):
+                result = test_appcore_initialization.safe_CLI_input(
+                    prompt="Enter bool: ",
+                    input_type=bool
+                )
+                assert result.success is True, f"Bool conversion failed for '{true_val}'"
+                assert result.data is True, f"'{true_val}' should convert to True"
+
+    def test_safe_cli_input_keyboard_interrupt(self, test_appcore_initialization: AppCore) -> None:
+        """Test safe_CLI_input handles KeyboardInterrupt gracefully"""
+        from unittest.mock import patch
+        
+        with patch('builtins.input', side_effect=KeyboardInterrupt):
+            result = test_appcore_initialization.safe_CLI_input(prompt="Enter: ")
+            assert result.success is False
+            assert "interrupted" in result.error.lower()
+
+    def test_safe_cli_input_eof_error(self, test_appcore_initialization: AppCore) -> None:
+        """Test safe_CLI_input handles EOFError (treated as empty string)"""
+        from unittest.mock import patch
+        
+        # EOFError produces empty string, then allow_empty=True accepts it
+        with patch('builtins.input', side_effect=EOFError):
+            result = test_appcore_initialization.safe_CLI_input(
+                prompt="Enter: ",
+                allow_empty=True
+            )
+            assert result.success is True
+            assert result.data == ''
+
+    def test_safe_cli_input_non_integer_max_retries(self, test_appcore_initialization: AppCore) -> None:
+        """Test safe_CLI_input with non-integer max_retries"""
+        result = test_appcore_initialization.safe_CLI_input(
+            prompt="Enter: ",
+            max_retries="not_an_int"
+        )
+        assert result.success is False
 
 
 @pytest.mark.usefixtures("test_appcore_initialization")
