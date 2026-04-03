@@ -1,15 +1,11 @@
-from pathlib import Path
-from tbot223_core.AppCore import ResultWrapper
-
-# Define base directory
-BASE_DIR=Path(__file__).resolve().parents[2] / ".OtherFiles"
+from tbot223_core import ResultWrapper
 
 # Example usage of ResultWrapper 
 def example_function(x: int, y: int) -> int: # not decorated
     return x + y
 
 @ResultWrapper()
-def decorated_function(x: int, y: int) -> ResultWrapper: # decorated
+def decorated_function(x: int, y: int):  # runtime return is wrapped as Result
     return x + y
 
 if __name__ == "__main__":
@@ -27,6 +23,6 @@ if __name__ == "__main__":
     if wrapped_result.success:
         print(f"Decorated function result: {wrapped_result.data}")
     else:
-        print(f"Decorated function raised an exception: {wrapped_result.error_message}")
+        print(f"Decorated function raised an exception: {wrapped_result.error}")
 
     print("\n -------------- \n TEST COMPLETE \n -------------- \n")

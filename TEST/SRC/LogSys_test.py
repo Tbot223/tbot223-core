@@ -213,6 +213,51 @@ class TestLoggerManagerEdgeCases:
         result = logger_manager.make_logger("int_level", log_level=logging.WARNING)
         assert result.success, "Creating logger with integer level should succeed"
 
+    def test_make_logger_with_timestamp_keyword(self, tmp_path):
+        """Test make_logger with explicit timestamp keyword."""
+        import logging
+
+        logger_manager = LoggerManager(base_dir=tmp_path / "logs", second_log_dir="test")
+        result = logger_manager.make_logger("timestamp_logger", log_level=logging.INFO, timestamp="custom_stamp")
+
+        assert result.success, f"Creating logger with timestamp failed: {result.error}"
+
+        logger = logger_manager.get_logger("timestamp_logger").data
+        file_handler = next(handler for handler in logger.handlers if isinstance(handler, logging.FileHandler))
+        assert "custom_stamp_log" in str(file_handler.baseFilename)
+
+    def test_make_logger_with_deprecated_time_alias(self, tmp_path):
+        """Test make_logger still accepts deprecated time keyword alias."""
+        import logging
+
+        logger_manager = LoggerManager(base_dir=tmp_path / "logs", second_log_dir="test")
+        with pytest.deprecated_call():
+            result = logger_manager.make_logger("legacy_time_logger", log_level=logging.INFO, time="legacy_stamp")
+
+        assert result.success, f"Creating logger with deprecated time alias failed: {result.error}"
+
+        logger = logger_manager.get_logger("legacy_time_logger").data
+        file_handler = next(handler for handler in logger.handlers if isinstance(handler, logging.FileHandler))
+        assert "legacy_stamp_log" in str(file_handler.baseFilename)
+
+    def test_make_logger_with_both_timestamp_and_time(self, tmp_path):
+        """Test make_logger rejects both timestamp and deprecated time keyword."""
+        import logging
+
+        logger_manager = LoggerManager(base_dir=tmp_path / "logs", second_log_dir="test")
+        result = logger_manager.make_logger("both_args_logger", log_level=logging.INFO, timestamp="ts", time="legacy")
+        assert not result.success, "Providing both timestamp and time should fail"
+        assert "ValueError" in result.error
+
+    def test_make_logger_with_unexpected_kwargs(self, tmp_path):
+        """Test make_logger rejects unexpected keyword arguments."""
+        import logging
+
+        logger_manager = LoggerManager(base_dir=tmp_path / "logs", second_log_dir="test")
+        result = logger_manager.make_logger("unexpected_logger", log_level=logging.INFO, foo="bar")
+        assert not result.success, "Unexpected kwargs should fail"
+        assert "TypeError" in result.error
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

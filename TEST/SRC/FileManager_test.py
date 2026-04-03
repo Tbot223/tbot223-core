@@ -115,16 +115,26 @@ class TestFileManager:
         test_file = tmp_path / "test_exist.txt"
         test_file.write_text("This file is for existence check.")
 
-        # Test exist for existing file
-        exist_result = file_manager.exist(path=test_file)
+        # Test exists for existing file
+        exist_result = file_manager.exists(path=test_file)
         assert exist_result.success, f"Exist check failed: {exist_result.error}"
         assert exist_result.data is True, "Exist check returned False for existing file."
 
-        # Test exist for non-existing file
+        # Test exists for non-existing file
         non_exist_file = tmp_path / "non_existing.txt"
-        exist_result_non = file_manager.exist(path=non_exist_file)
+        exist_result_non = file_manager.exists(path=non_exist_file)
         assert exist_result_non.success, f"Exist check failed: {exist_result_non.error}"
         assert exist_result_non.data is False, "Exist check returned True for non-existing file."
+
+    def test_exist_deprecated_alias(self, file_manager, tmp_path):
+        test_file = tmp_path / "test_exist_alias.txt"
+        test_file.write_text("deprecated alias")
+
+        with pytest.deprecated_call():
+            exist_result = file_manager.exist(path=test_file)
+
+        assert exist_result.success
+        assert exist_result.data is True
 
     def test_with_exit(self, file_manager, tmp_path):
         test_file = tmp_path / "test_with.txt"
@@ -181,20 +191,41 @@ class TestFileManagerEdgeCases:
         assert nested_dir.exists() and nested_dir.is_dir(), "Nested directory was not created"
     
     def test_exist_method(self, file_manager, tmp_path):
-        """Test the exist method"""
+        """Test the exists method"""
         # Test with existing file
         existing_file = tmp_path / "existing.txt"
         existing_file.write_text("test")
         
-        result = file_manager.exist(path=existing_file)
+        result = file_manager.exists(path=existing_file)
         assert result.success, f"Exist check failed: {result.error}"
         assert result.data is True, "Exist should return True for existing file"
         
         # Test with non-existing file
         non_existing = tmp_path / "non_existing.txt"
-        result = file_manager.exist(path=non_existing)
+        result = file_manager.exists(path=non_existing)
         assert result.success, f"Exist check failed: {result.error}"
         assert result.data is False, "Exist should return False for non-existing file"
+
+    def test_read_file_uses_shared_lock_for_large_reads(self, file_manager, tmp_path, monkeypatch):
+        """Test read_file uses shared lock mode for locked reads."""
+        test_file = tmp_path / "lock_test.txt"
+        test_file.write_text("lock me")
+
+        monkeypatch.setattr(file_manager, "LOCK_FILE_SIZE_THRESHOLD", 0)
+
+        observed_modes = []
+        original_lock = file_manager._lock
+
+        def tracking_lock(file_obj, mode):
+            observed_modes.append(mode)
+            return original_lock(file_obj, mode)
+
+        monkeypatch.setattr(file_manager, "_lock", tracking_lock)
+
+        result = file_manager.read_file(file_path=test_file, as_bytes=False)
+        assert result.success, f"Read with lock failed: {result.error}"
+        assert observed_modes[0] == 2, "Read should acquire shared lock mode"
+        assert observed_modes[-1] == 0, "Read should release lock after reading"
     
     def test_read_json_invalid_extension(self, file_manager, tmp_path):
         """Test reading JSON from non-JSON file"""
@@ -203,7 +234,16 @@ class TestFileManagerEdgeCases:
         
         result = file_manager.read_json(file_path=txt_file)
         assert not result.success, "Reading JSON from .txt should fail"
-    
+
+    def test_read_json_invalid_content(self, file_manager, tmp_path):
+        """Test reading JSON file with invalid JSON content"""
+        json_file = tmp_path / "test_invalid.json"
+        json_file.write_text('{invalid json}')
+
+        result = file_manager.read_json(file_path=json_file)
+        assert not result.success, "Reading JSON with invalid syntax should fail"
+        assert "JSONDecodeError" in result.error or "Expecting value" in result.error
+
     def test_delete_nonexistent_file(self, file_manager, tmp_path):
         """Test deleting non-existent file"""
         nonexistent = tmp_path / "does_not_exist.txt"
@@ -265,6 +305,31 @@ class TestFileManagerEdgeCases:
         read_result = file_manager.read_json(file_path=test_file)
         assert read_result.success, f"Read JSON with unicode failed: {read_result.error}"
         assert read_result.data == test_data, "Unicode data mismatch"
+
+    def test_list_of_files_not_a_directory(self, file_manager, tmp_path):
+        """Test list_of_files on a file path (not a directory)"""
+        test_file = tmp_path / "not_a_dir.txt"
+        test_file.write_text("I am a file")
+        
+        result = file_manager.list_of_files(dir_path=test_file)
+        assert not result.success, "list_of_files on a file should fail"
+        assert "NotADirectoryError" in result.error
+
+    def test_read_json_nonexistent_file(self, file_manager, tmp_path):
+        """Test read_json for a non-existent file"""
+        nonexistent = tmp_path / "nonexistent.json"
+        
+        result = file_manager.read_json(file_path=nonexistent)
+        assert not result.success, "Reading non-existent JSON should fail"
+        assert "FileNotFoundError" in result.error
+
+    def test_atomic_write_creates_parent_dirs(self, file_manager, tmp_path):
+        """Test atomic_write creates parent directories if they don't exist"""
+        nested_file = tmp_path / "a" / "b" / "c" / "deep_file.txt"
+        
+        result = file_manager.atomic_write(file_path=nested_file, data="nested content")
+        assert result.success, f"Atomic write with nested dirs failed: {result.error}"
+        assert nested_file.read_text() == "nested content"
 
 
 if __name__ == "__main__":

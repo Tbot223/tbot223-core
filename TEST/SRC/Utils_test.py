@@ -213,6 +213,25 @@ class TestGlobalVars:
         # Access using call syntax
         call_value = global_vars(key)
         assert call_value.data == value, "Call syntax did not return the expected value"
+
+    def test_call_syntax_allows_none_value(self, setup_module):
+        _, _, global_vars = setup_module
+
+        key = "none_var"
+
+        set_result = global_vars(key, None)
+        assert set_result.success, f"Failed to set None value: {set_result.error}"
+
+        get_result = global_vars(key)
+        assert get_result.success, f"Failed to get None value: {get_result.error}"
+        assert get_result.data is None, "Call syntax should store None as a real value"
+
+    def test_missing_attribute_raises_attribute_error(self, setup_module):
+        _, _, global_vars = setup_module
+
+        assert hasattr(global_vars, "missing_attr") is False
+        with pytest.raises(AttributeError):
+            _ = global_vars.missing_attr
     
     def test_delete_global_var(self, setup_module):
         _, _, global_vars = setup_module
@@ -334,8 +353,14 @@ class TestEdgeCases:
         key = None
         set_result = global_vars.set(key, value)
         assert not set_result.success, "Setting a variable with None as key should fail"
+        assert "ValueError" in set_result.error, "None key should fail with ValueError"
         get_result = global_vars.get(key)
         assert not get_result.success, "Getting a variable with None as key should fail"
+
+        key = 123
+        set_result = global_vars.set(key, value)
+        assert not set_result.success, "Setting a variable with non-string key should fail"
+        assert "ValueError" in set_result.error, "Non-string key should fail with ValueError"
 
     @pytest.mark.performance
     def test_global_var_extreme_change(self, setup_module):
@@ -605,6 +630,27 @@ class TestSharedMemory:
                 global_vars.shm_close(name)
             except:
                 pass
+
+    def test_shm_cache_eviction_warns_for_owned_memory(self, monkeypatch):
+        """Test cache eviction warns when the current process owns the shared memory."""
+        global_vars = GlobalVars(is_logging_enabled=False, shared_memory_cache_max_size=1)
+        messages = []
+        monkeypatch.setattr(
+            GlobalVars,
+            "_log",
+            lambda self, level, message: messages.append((level, message)),
+        )
+
+        shm_name_1 = f"test_cache_owner_warn_1_{os.getpid()}"
+        shm_name_2 = f"test_cache_owner_warn_2_{os.getpid()}"
+
+        global_vars.shm_gen(name=shm_name_1, size=512, create_lock=False)
+        global_vars.shm_gen(name=shm_name_2, size=512, create_lock=False)
+
+        assert any(level == "WARNING" and "Call shm_close() explicitly to unlink" in message for level, message in messages)
+
+        global_vars.shm_close(shm_name_1)
+        global_vars.shm_close(shm_name_2)
     
     def test_shm_lock_method(self, setup_module):
         """Test the lock() method for GlobalVars"""
@@ -659,6 +705,20 @@ class TestSharedMemoryFailures:
         # Negative size
         result = global_vars.shm_gen(name="test_invalid_size", size=-100)
         assert not result.success, "Negative size should fail"
+
+    def test_shm_gen_existing_smaller_shared_memory_fails(self, setup_module):
+        """Test shm_gen fails when an existing shared memory block is smaller than requested."""
+        _, _, global_vars = setup_module
+
+        shm_name = f"test_size_mismatch_{os.getpid()}"
+        existing = shared_memory.SharedMemory(create=True, size=128, name=shm_name)
+        try:
+            result = global_vars.shm_gen(name=shm_name, size=100000, create_lock=False)
+            assert not result.success, "Connecting to too-small existing shared memory should fail"
+            assert "Existing SHM" in str(result.data) or "requested" in str(result.data)
+        finally:
+            existing.close()
+            existing.unlink()
     
     def test_shm_sync_nonexistent(self, setup_module):
         """Test syncing to nonexistent shared memory"""
@@ -761,6 +821,13 @@ class TestUtilsMethods:
         
         result = utils.insert_at_intervals([1, 2, 3], -1, 'X')
         assert not result.success, "Negative interval should fail"
+
+    def test_insert_at_intervals_invalid_at_start(self, setup_module):
+        """Test insert_at_intervals with non-boolean at_start"""
+        utils, _, _ = setup_module
+        
+        result = utils.insert_at_intervals([1, 2, 3], 2, 'X', at_start="yes")
+        assert not result.success, "Non-boolean at_start should fail"
 
 
 @pytest.mark.usefixtures("setup_module")
@@ -899,6 +966,32 @@ class TestPBKDF2Failures:
             algorithm="sha256"
         )
         assert not result.success, "Invalid salt hex should fail"
+
+    def test_verify_pbkdf2_non_string_salt_hex(self, setup_module):
+        """Test verify_pbkdf2_hmac with non-string salt_hex"""
+        utils, _, _ = setup_module
+        
+        result = utils.verify_pbkdf2_hmac(
+            password="test_password",
+            salt_hex=12345,
+            hash_hex="abc123",
+            iterations=100000,
+            algorithm="sha256"
+        )
+        assert not result.success, "Non-string salt_hex should fail"
+
+    def test_verify_pbkdf2_non_string_hash_hex(self, setup_module):
+        """Test verify_pbkdf2_hmac with non-string hash_hex"""
+        utils, _, _ = setup_module
+        
+        result = utils.verify_pbkdf2_hmac(
+            password="test_password",
+            salt_hex="abc123",
+            hash_hex=12345,
+            iterations=100000,
+            algorithm="sha256"
+        )
+        assert not result.success, "Non-string hash_hex should fail"
 
 
 @pytest.mark.usefixtures("setup_module")

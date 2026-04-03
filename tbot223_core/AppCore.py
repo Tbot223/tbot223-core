@@ -18,7 +18,8 @@ from tbot223_core.LogSys import LoggerManager, Log
 
 class AppCore:
     """
-    Provides core functionalities for application management.
+    Core application utilities for parallel execution, localization, console
+    control, and interactive CLI input.
 
     Attributes:
         is_logging_enabled (bool): Flag to enable or disable logging.
@@ -44,10 +45,12 @@ class AppCore:
             Clear the console screen.
 
         exit_application(code) -> Result:
-            Exit the application with the specified exit code. ( Returns Only On Failure )
+            Exit the application with the specified exit code.
+            Returns only on failure.
 
         restart_application() -> Result:
-            Restart the current application. ( Returns Only On Failure )
+            Restart the current application.
+            Returns only on failure.
     """
 
     def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, default_lang: str="en",
@@ -93,7 +96,7 @@ class AppCore:
     @staticmethod
     def _check_executable(data: List[Tuple[Callable[ ... , Any], Dict]], workers: int, override: bool, timeout: float, chunk_size: Optional[int] = None) -> Tuple[bool, Optional[str]]:
         """
-        Check if the functions in data and workers are valid for execution.
+        Validate executor input before work is submitted.
 
         Args:
             `data` : List of tuples containing functions and their parameters.
@@ -105,7 +108,7 @@ class AppCore:
             Tuple (is_valid: bool, error_message: Optional[str])
 
         Example:
-            >>> # I'm not recommending to call this method directly, it's for internal use.
+            >>> # Internal helper; typically not called directly.
             >>> data = [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
             >>> is_valid, error_message = app_core._check_executable(data, workers=4, override=False, timeout=10)
             >>> if not is_valid:
@@ -124,13 +127,27 @@ class AppCore:
             return False, f"workers {workers} exceeds number of tasks {len(data)}"
         if timeout is None or not isinstance(timeout, (int, float)) or timeout <= 0.1:
             return False, "timeout must be a positive number"
-        if chunk_size is not None and (not isinstance(chunk_size, int) or chunk_size <= 0):
-            return False, "chunk_size must be a positive integer"
+        if chunk_size is not None and (not isinstance(chunk_size, int) or chunk_size < 0):
+            return False, "chunk_size must be 0 or a positive integer"
         return True, None
+
+    @staticmethod
+    def _resolve_worker_count(workers: Optional[int], data_length: int, override: bool) -> int:
+        """
+        Resolve worker count at call time.
+
+        If workers is omitted, use the current CPU count. When override is False,
+        the default worker count is capped to the number of tasks to avoid
+        validation errors for small task lists.
+        """
+        cpu_count = os.cpu_count() or 1
+        if workers is None:
+            return cpu_count if override else min(cpu_count, max(data_length, 1))
+        return min(workers, cpu_count) if override else workers
 
     def _generic_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int, timeout: float, type: str) -> List[Result]:
         """
-        Generic executor method to be used by both thread and process pool executors.
+        Shared executor implementation used by the thread and process pools.
 
         Args:
             `data` : List of tuples containing functions and their parameters.
@@ -142,7 +159,7 @@ class AppCore:
             indexed list of Result objects corresponding to each function execution.
 
         Example:
-            >>> # I'm not recommending to call this method directly, it's for internal use.
+            >>> # Internal helper; typically not called directly.
             >>> data = [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
             >>> results = app_core._generic_executor(data, workers=4, timeout=10, type='thread')
             >>> for res in results:
@@ -165,17 +182,11 @@ class AppCore:
                 except Exception as e:
                     self._log("ERROR", f"Error executing task at index {idx}: {str(e)}")
                     results[idx] = self._exception_tracker.get_exception_return(e, params=data[idx][1])
-
-            try:
-                executor.shutdown(wait=True)
-            except Exception as e:
-                self._log("ERROR", f"Error during executor shutdown: {str(e)}")
-                self._log("ERROR", self._exception_tracker.get_exception_return(e).data)
         return results
 
     def _chunk_list(self, data_list: List, chunk_size: int) -> Generator[List, None, None]:
         """
-        Helper method to split a list into smaller chunks.
+        Yield successive chunks from a list.
 
         Args:
             `data_list` : The list to be chunked.
@@ -185,7 +196,7 @@ class AppCore:
             A list of chunks (sublists).
 
         Example:
-            >>> # I'm not recommending to call this method directly, it's for internal use.
+            >>> # Internal helper; typically not called directly.
             >>> my_list = [1, 2, 3, 4, 5, 6, 7]
             >>> chunks = app_core._chunk_list(my_list, chunk_size=3)
             >>> print(chunks)  # Output: [[1, 2, 3], [4, 5, 6], [7]]
@@ -196,8 +207,7 @@ class AppCore:
     @staticmethod
     def __lang_cache_management__(func):
         """
-        Decorator to manage language cache in get_text_by_lang method.
-        If a KeyError occurs, it attempts to reload the language file and retry the lookup.
+        Decorator that reloads a language file when a cached key lookup fails.
 
         Args:
             `func` : The get_text_by_lang method to be decorated.
@@ -206,7 +216,7 @@ class AppCore:
             The wrapped function with language cache management.
 
         Example:
-            >>> # it's made for "get_text_by_lang" method only.
+            >>> # Intended for `get_text_by_lang()` only.
             >>> @AppCore.__lang_cache_management__
             >>> def get_text_by_lang(self, key: str, lang: str) -> Result
             >>>     # function implementation
@@ -228,24 +238,28 @@ class AppCore:
                         return func(self, *args, **kwargs)
                     else:
                         self._log("ERROR", f"Key '{key}' still not found in language '{lang}'. it may have been removed.")
-                        return Result(False, res.error, "Dose not exist key even after reloading lang file", res.data)
+                        return Result(False, res.error, "Does not exist key even after reloading lang file", res.data)
             return res
         return wrapper
 
 
     # external Methods
-    def thread_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int = os.cpu_count(), override: bool = False, timeout: float = None) -> Result:
+    def thread_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: Optional[int] = None, override: bool = False, timeout: float = None) -> Result:
         """
-        Execute functions in parallel using ThreadPoolExecutor.
+        Execute tasks concurrently with `ThreadPoolExecutor`.
 
         Args:
-            `data` : List of tuples, Each containing a function and a dictionary of arguments. Example: [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
-            `workers` : Number of worker threads to use. Defaults to os.cpu_count().
-            `override` : If True, allows workers to exceed the number of tasks. also limits is unlocked.
-            `timeout` : Maximum time to wait for each function to complete. ( 0.1 seconds minimum )
+            `data` : A list of `(callable, kwargs_dict)` tuples.
+            `workers` : Number of worker threads to use. Defaults to the
+                current CPU count at call time.
+            `override` : If `True`, allow the requested worker count to exceed
+                the number of tasks.
+            `timeout` : Maximum time to wait for each task to complete.
+                Minimum value: `0.1` seconds.
 
         Returns:
-            indexed list of Result objects corresponding to each function execution.
+            Result: A `Result` object whose `data` field contains an indexed
+                list of task results.
 
         Example:
             >>> data = [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
@@ -254,12 +268,12 @@ class AppCore:
             >>>     print(res.success, res.data)
         """
         try:
-            is_valid, error_message = self._check_executable(data, workers, override, timeout)
+            resolved_workers = self._resolve_worker_count(workers, len(data) if isinstance(data, list) else 0, override)
+            is_valid, error_message = self._check_executable(data, resolved_workers, override, timeout)
             if not is_valid:
                 self._log("ERROR", f"Thread pool executor validation failed: {error_message}")
                 return Result(False, error_message, None, None)
-            workers = min(workers or os.cpu_count(), os.cpu_count()) if override else workers
-            results = self._generic_executor(data, workers, timeout, type='thread')
+            results = self._generic_executor(data, resolved_workers, timeout, type='thread')
 
             self._log("INFO", f"Thread pool executor completed with {len(results)} tasks.")
             return Result(True, None, None, results)
@@ -267,19 +281,26 @@ class AppCore:
             self._log("ERROR", f"Error in thread pool executor: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
 
-    def process_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int = os.cpu_count(), override: bool = False, timeout: float = None, chunk_size: Optional[int] = None) -> Result:
+    def process_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: Optional[int] = None, override: bool = False, timeout: float = None, chunk_size: Optional[int] = None) -> Result:
         """
-        Execute functions in parallel using ProcessPoolExecutor.
+        Execute tasks concurrently with `ProcessPoolExecutor`.
 
         Args:
-            `data` : List of tuples, Each containing a function and a dictionary of arguments. Example: [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
-            `workers` : Number of worker processes to use. Defaults to os.cpu_count().
-            `override` : If True, allows workers to exceed the number of tasks. also limits is unlocked.
-            `timeout` : Maximum time to wait for each function to complete. ( 0.1 seconds minimum )
-            `chunk_size` : Number of tasks to submit at once to each worker process. If None, it will be calculated based on the number of workers and total tasks.
+            `data` : A list of `(callable, kwargs_dict)` tuples.
+            `workers` : Number of worker processes to use. Defaults to the
+                current CPU count at call time.
+            `override` : If `True`, allow the requested worker count to exceed
+                the number of tasks.
+            `timeout` : Maximum time to wait for each task to complete.
+                Minimum value: `0.1` seconds.
+            `chunk_size` : Chunking mode for process execution.
+                - `None` : Submit the full task list to a single executor.
+                - `0` : Automatically compute chunk size from task count and workers.
+                - positive int : Submit tasks in batches of that size.
 
         Returns:
-            indexed list of Result objects corresponding to each function execution.
+            Result: A `Result` object whose `data` field contains an indexed
+                list of task results.
 
         Example:
             >>> data = [(func1, {'arg1': val1}), (func2, {'arg2': val2})]
@@ -288,17 +309,20 @@ class AppCore:
             >>>     print(res.success, res.data)
         """
         try:
-            is_valid, error_message = self._check_executable(data, workers, override, timeout, chunk_size)
+            resolved_workers = self._resolve_worker_count(workers, len(data) if isinstance(data, list) else 0, override)
+            is_valid, error_message = self._check_executable(data, resolved_workers, override, timeout, chunk_size)
             if not is_valid:
                 self._log("ERROR", f"Process pool executor validation failed: {error_message}")
                 return Result(False, error_message, None, None)
-            workers = min(workers or os.cpu_count(), os.cpu_count()) if override else workers
-            computed_chunk = chunk_size if chunk_size is not None else max(1, int(math.ceil(len(data) / workers)))
-            chunks = list(self._chunk_list(data, computed_chunk))
-            results = []
-            for chunk in chunks:
-                chunk_results = self._generic_executor(chunk, workers, timeout, type='process')
-                results.extend(chunk_results)
+            if chunk_size is None:
+                results = self._generic_executor(data, resolved_workers, timeout, type='process')
+            else:
+                computed_chunk = chunk_size if chunk_size > 0 else max(1, int(math.ceil(len(data) / resolved_workers)))
+                chunks = list(self._chunk_list(data, computed_chunk))
+                results = []
+                for chunk in chunks:
+                    chunk_results = self._generic_executor(chunk, resolved_workers, timeout, type='process')
+                    results.extend(chunk_results)
 
             self._log("INFO", f"Process pool executor completed with {len(results)} tasks.")
             return Result(True, None, None, results)
@@ -318,7 +342,7 @@ class AppCore:
             `lang` : The language code (e.g., 'en', 'fr').
 
         Returns:
-            The localized text corresponding to the key and language.
+            Result: A Result object containing the localized text.
 
         Example:
             >>> result = app_core.get_text_by_lang('greeting', 'en')
@@ -353,17 +377,17 @@ class AppCore:
 
     def clear_console(self) -> Result:
         """
-        Clear the console screen using the appropriate command based on the operating system.
+        Clear the current console screen.
 
         Returns:
-            Result object indicating success or failure of the operation.
+            Result: Indicates whether the console-clear command succeeded.
 
         Example:
             >>> result = app_core.clear_console() # then console is cleared
         """
         try:
-            command = 'cls' if os.name == 'nt' else 'clear'
-            subprocess.run(command, shell=True, check=True)
+            command = ["cmd", "/c", "cls"] if os.name == 'nt' else ["clear"]
+            subprocess.run(command, shell=False, check=True)
 
             self._log("INFO", "Console cleared successfully.")
             return Result(True, None, None, "Console cleared successfully.")
@@ -373,14 +397,14 @@ class AppCore:
 
     def exit_application(self, code: int=0, pause: bool=False) -> Result:
         """
-        Exit the application with the specified exit code.
+        Terminate the current process with the specified exit code.
 
         Args:
             `code` : Exit code to return to the operating system. Default is 0.
             `pause` : If True, waits for user input before exiting. Default is False.
 
         Returns:
-            returns only on failure with a Result object indicating the error.
+            Result: Returned only if the exit attempt fails.
 
         Example:
             >>> result = app_core.exit_application(0) # then application exits with code 0
@@ -396,13 +420,13 @@ class AppCore:
 
     def restart_application(self, pause: bool=False) -> Result:
         """
-        Restart the current application.
+        Restart the current Python process.
 
         Args:
             `pause` : If True, waits for user input before restarting. Default is False.
 
         Returns:
-            returns only on failure with a Result object indicating the error.
+            Result: Returned only if the restart attempt fails.
 
         Example:
             >>> result = app_core.restart_application() # then application restarts
@@ -417,31 +441,40 @@ class AppCore:
             self._log("ERROR", f"Error in restart_application: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
 
-    def safe_CLI_input(self, prompt: str="", input_type: type=str, other_type: type=False, valid_options: List[str]=None, case_sensitive: bool=False, allow_empty: bool=False, max_retries: int=10) -> Result:
+    def safe_CLI_input(self, prompt: str="", input_type: type=str, other_type: bool=False, valid_options: List[str]=None, case_sensitive: bool=False, allow_empty: bool=False, max_retries: int=10) -> Result:
         """
-        Safely get user input from the command line with validation.
+        Prompt for CLI input with validation and optional type conversion.
 
         Args:
             `prompt` : The prompt message to display to the user.
-            `input_type` : The expected type of the user input. Default is str. (expected types: str, int, float, bool)
-            `other_type` : If True, allows conversion to types other than the supported ones.
-            `valid_options` : A list of valid options. If provided, input must match one of these options.
-            `case_sensitive` : If True, input validation is case sensitive.
-            `allow_empty` : If True, allows empty input.
-            `max_retries` : Maximum number of retry attempts before returning failure. Default is 10.
+            `input_type` : The target type for the input. Supported built-in
+                types are `str`, `int`, `float`, and `bool`.
+            `other_type` : If `True`, allow custom conversion types beyond the
+                supported built-ins.
+            `valid_options` : Optional list of accepted values.
+            `case_sensitive` : If `True`, validate `valid_options` exactly as
+                written.
+            `allow_empty` : If `True`, allow an empty input string.
+            `max_retries` : Maximum number of invalid attempts before the
+                method returns failure.
 
         Note:
-            - If `input_type` is bool, it will accept common `true/false` values `(e.g., "true", "false", "yes", "no", "1", "0")` and convert them to boolean.
-                `[ "true", "t", "yes", "y", "1", "on", "enable", "enabled" ]` will be considered as True
-                `[ "false", "f", "no", "n", "0", "off", "disable", "disabled" ]` will be considered as False
-                WARNING: If `input_type` is bool, ensure `valid_options` contains values from the supported true/false lists above (e.g., `["y", "n"]`).
-                Using unsupported values (e.g., `["ok", "cancel"]`) will cause conversion to fail even if validation passes.
-            - If `valid_options` is provided, the input will be validated against this list. If `case_sensitive` is False, the validation will be case insensitive.
-            - If `allow_empty` is False, empty input will be rejected and the user will be prompted again.
-            - The method will keep prompting the user until valid input is received or `max_retries` is exceeded.
+            - When `input_type` is `bool`, common true/false values are
+              accepted.
+            - Values like `["true", "t", "yes", "y", "1", "on", "enable",
+              "enabled"]` map to `True`.
+            - Values like `["false", "f", "no", "n", "0", "off", "disable",
+              "disabled"]` map to `False`.
+            - If `input_type` is `bool`, make sure `valid_options` uses values
+              from those supported sets. For example, `["y", "n"]` works, but
+              `["ok", "cancel"]` will validate and then fail during boolean
+              conversion.
+            - The prompt repeats until valid input is received or
+              `max_retries` is exceeded.
 
         Returns:
-            The user input if it passes validation, or a Result object with `success=False` if `max_retries` is exceeded.
+            Result: A Result object containing the validated value, or a
+                failure result if `max_retries` is exceeded.
 
         Example:
             >>> result = app_core.safe_CLI_input(prompt="Enter your choice: ", valid_options=["yes", "no"], case_sensitive=False, max_retries=3)
@@ -512,12 +545,16 @@ class AppCore:
 
 class ResultWrapper:
     """
-    A decorator class that ensures the return value of an existing function is wrapped in a Result object.
+    Decorator that ensures the wrapped function always returns a `Result`.
 
-    - DO NOT use ExceptionTrackerDecorator with ResultWrapper, as ResultWrapper already handles exceptions.
-    - if the decorated function already returns a Result object, it will be returned as is.
-    - If an exception occurs during the function execution, it will be caught and a Result object indicating failure will be returned.
-    - Use for Non-critical functions where you want to ensure a Result object is always returned.
+    - Do not combine it with `ExceptionTrackerDecorator`, because
+      `ResultWrapper` already handles exceptions.
+    - If the wrapped function already returns a `Result`, it is passed
+      through unchanged.
+    - If an exception is raised, the decorator converts it into a failure
+      `Result`.
+    - Best suited for non-critical helper functions where a consistent return
+      shape is more important than preserving raw exceptions.
 
     Example:
         >>> @ResultWrapper()

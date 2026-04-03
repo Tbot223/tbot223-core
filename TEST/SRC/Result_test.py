@@ -72,8 +72,16 @@ class TestResult:
     def test_expect_cancelled_raises(self):
         """Test expect raises ResultUnwrapException when cancelled."""
         result = Result(success=None, error=None, context="CancelledContext", data=None)
-        with pytest.raises(ResultUnwrapException):
+        with pytest.raises(ResultUnwrapException) as exc_info:
             result.expect()
+        assert "cancelled" in str(exc_info.value).lower() or "not executed" in str(exc_info.value).lower()
+
+    def test_expect_custom_message_overrides_error(self):
+        """Test expect uses custom message when provided."""
+        result = Result(success=False, error="Original error", context="ExpectContext", data=None)
+        with pytest.raises(ResultUnwrapException) as exc_info:
+            result.expect("Custom failure message")
+        assert exc_info.value.error == "Custom failure message"
 
     # unwrap_or() tests
     def test_unwrap_or_success(self):

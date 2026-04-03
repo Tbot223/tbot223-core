@@ -7,6 +7,7 @@ import shutil
 import stat
 import os
 import logging
+import warnings
 if os.name != 'nt':
     import fcntl
 else:
@@ -20,41 +21,8 @@ from tbot223_core.Utils.Utils import Utils
 
 class FileManager:
     """
-    The FileManager class provides various file management functionalities such as reading, writing, deleting files and directories, and listing files.
-
-    Attributes:
-        - is_logging_enabled (bool): Flag to enable or disable logging.
-        - is_debug_enabled (bool): Flag to enable or disable debug mode.
-        - base_dir (Union[str, Path]): Base directory for file manager. It is NOT I/O base directory. It is used for logging base directory if logging is enabled.
-        - logger_manager_instance (LogSys.LoggerManager): Instance of LoggerManager for logging.
-        - logger (Any): Logger instance for logging messages.
-        - log_instance (LogSys.Log): Instance of Log for logging messages.
-        - Utils_instance (Utils.Utils): Instance of Utils for utility functions.
-
-    Methods:
-        - atomic_write(file_path, data) -> Result:
-            Atomically write data to a file.
-
-        - read_file(file_path, as_bytes=False) -> Result:
-            Read the content of a file.
-
-        - write_json(file_path, data, indent=4) -> Result:
-            Write JSON serializable data to a file in JSON format.
-
-        - read_json(file_path) -> Result:
-            Read JSON content from a file and parse it into a Python object.
-
-        - list_of_files(dir_path, extensions=None, only_name=False) -> Result:
-            List all files in a directory, optionally filtering by extensions.
-
-        - delete_file(file_path) -> Result:
-            Delete a file.
-
-        - delete_directory(dir_path) -> Result:
-            Delete a directory and all its contents.
-
-        - create_directory(dir_path) -> Result:
-            Create a directory.
+    File-system helper for safe reads, writes, directory operations, and JSON
+    handling.
     """
 
     # File locking threshold: files larger than this size will be locked during read operations
@@ -93,11 +61,12 @@ class FileManager:
     @staticmethod
     def _handle_exc(func, path, exc_info):
         """
-        Handle exceptions during file operations by changing file permissions and retrying.
+        Retry a file-system operation after relaxing read-only permissions.
+
         Args:
             `func` : The function to retry.
             `path` : The path to the file or directory.
-            `exc_info` : Exception information.
+            `exc_info` : Exception information from the failed operation.
 
         Example:
             >>> file_manager._handle_exc(os.remove, "some/protected/file.txt", exc_info)
@@ -110,13 +79,13 @@ class FileManager:
 
     def _str_to_path(self, path: Any) -> Path:
         """
-        Convert string path to Path object
+        Convert a string path to a `Path` object.
 
         Args:
             `path` : The path to convert.
 
         Returns:
-            Path: The converted Path object.
+            Path: The converted path object.
 
         Example:
             >>> path_obj = file_manager._str_to_path("some/directory/file.txt")
@@ -130,13 +99,13 @@ class FileManager:
     @staticmethod
     def _lock(file: Path, mode: int):
         """
-        Lock a file using fcntl (Unix) or msvcrt (Windows).
+        Apply or release a file lock.
 
         Args:
-            `file` : The file object to lock.
-            `mode` : The lock mode (fcntl.LOCK_EX, fcntl.LOCK_SH for Unix; msvcrt.LK_LOCK, msvcrt.LK_RLCK for Windows, 1 is lock, 0 is unlock).
-                UNIX: 1 for LOCK_EX, 0 for LOCK_UN, 2 for LOCK_SH
-                WINDOWS: 1 for LK_LOCK, 0 for LK_UNLCK
+            `file` : Open file object to lock.
+            `mode` : Lock mode.
+                UNIX: `1` for `LOCK_EX`, `0` for `LOCK_UN`, `2` for `LOCK_SH`
+                WINDOWS: `1` for `LK_LOCK`, `0` for `LK_UNLCK`
 
         Returns:
             This method does not return any value.
@@ -157,13 +126,16 @@ class FileManager:
         else:
             if mode == 1:
                 msvcrt.locking(file.fileno(), msvcrt.LK_LOCK, os.path.getsize(file.name))
+            elif mode == 2:
+                lock_mode = msvcrt.LK_RLCK if hasattr(msvcrt, "LK_RLCK") else msvcrt.LK_LOCK
+                msvcrt.locking(file.fileno(), lock_mode, os.path.getsize(file.name))
             else:
                 msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, os.path.getsize(file.name))
 
 
     def atomic_write(self, file_path: Union[str, Path], data: Any) -> Result:
         """
-        Atomically write "data" to "file_path"
+        Atomically write data to a file.
 
         - If data is bytes, write in binary mode; if str, write in text mode with utf-8 encoding.
         - Use a temporary file in the same directory and rename it to ensure atomicity.
@@ -230,7 +202,7 @@ class FileManager:
 
     def read_file(self, file_path: Union[str, Path], as_bytes: bool=False) -> Result:
         """
-        Read the content of the file at "file_path"
+        Read a file from disk.
 
         - If as_bytes is True, read in binary mode; otherwise, read in text mode with utf-8 encoding.
         - Return the content in the data field of the Result object.
@@ -259,7 +231,7 @@ class FileManager:
 
             def safe_read(f, lock):
                 if lock:
-                    self._lock(f, 1)
+                    self._lock(f, 2)
                 try:
                     content = f.read()
                 finally:
@@ -278,7 +250,7 @@ class FileManager:
 
     def write_json(self, file_path: Union[str, Path], data: Any, indent: int=4) -> Result:
         """
-        Write JSON serializable "data" to "file_path" in JSON format
+        Serialize JSON-compatible data and write it to disk.
 
         - Use atomic_write to ensure atomicity.
         - Pretty-print JSON with specified indentation.
@@ -314,7 +286,7 @@ class FileManager:
 
     def read_json(self, file_path: Union[str, Path]) -> Result:
         """
-        Read JSON content from "file_path" and parse it into a Python object
+        Read a JSON file and parse it into a Python object.
 
         - Return the parsed object in the data field of the Result object.
 
@@ -350,11 +322,11 @@ class FileManager:
 
     def list_of_files(self, dir_path: Union[str, Path], extensions: List[str]=None, only_name: bool = False) -> Result:
         """
-        List all files in the directory at "dir_path"
+        List files in a directory.
 
-        - If "extension" is provided, filter files by the given extension (case-insensitive).
-        - Return the list of file paths in the data field of the Result object.
-        - If only_name is True, return only file names instead of full paths.
+        - If `extensions` is provided, filter files by those extensions
+          case-insensitively.
+        - If `only_name` is `True`, return file stems instead of full paths.
 
         Args:
             `dir_path` : The path to the directory to list files from.
@@ -394,9 +366,9 @@ class FileManager:
             self._log("ERROR", f"Failed to list files in {dir_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
 
-    def exist(self, path: Union[str, Path]) -> Result:
+    def exists(self, path: Union[str, Path]) -> Result:
         """
-        Check if the file or directory at "path" exists
+        Check whether a file or directory exists.
 
         Args:
             `path` : The path to the file or directory to check.
@@ -405,7 +377,7 @@ class FileManager:
             Result: A Result object containing a boolean in the data field indicating existence.
 
         Example:
-            >>> result = file_manager.exist("some/file_or_directory")
+            >>> result = file_manager.exists("some/file_or_directory")
             >>> if result.success:
             >>>     if result.data:
             >>>         print("Path exists!")
@@ -424,9 +396,20 @@ class FileManager:
             self._log("ERROR", f"Failed to check existence for {path}: {e}")
             return self._exception_tracker.get_exception_return(e)
 
+    def exist(self, path: Union[str, Path]) -> Result:
+        """
+        Deprecated alias for `exists()`.
+        """
+        warnings.warn(
+            "FileManager.exist() is deprecated; use FileManager.exists() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.exists(path)
+
     def delete_file(self, file_path: Union[str, Path]) -> Result:
         """
-        Delete the file at "file_path"
+        Delete a file.
 
         - If the file does not exist, raise FileNotFoundError.
 
@@ -462,7 +445,7 @@ class FileManager:
 
     def delete_directory(self, dir_path: Union[str, Path]) -> Result:
         """
-        Delete the directory at "dir_path" and all its contents
+        Delete a directory and everything inside it.
 
         - If the directory does not exist, raise FileNotFoundError.
 
@@ -503,7 +486,7 @@ class FileManager:
 
     def create_directory(self, dir_path: Union[str, Path]) -> Result:
         """
-        Create the directory at "dir_path"
+        Create a directory.
 
         - If the directory already exists, do nothing.
 

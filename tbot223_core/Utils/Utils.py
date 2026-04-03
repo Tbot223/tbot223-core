@@ -11,26 +11,7 @@ from tbot223_core.Result import Result
 
 class Utils:
     """
-    Utility class providing various helper functions.
-
-    Methods:
-        - str_to_path(path_str) -> Result
-            Convert a string to a Path object.
-
-        - hashing(data, algorithm) -> Result
-            Hash a string using the specified algorithm.
-
-        - pbkdf2_hmac(password, algorithm, iterations, salt_size) -> Result
-            Generate a PBKDF2 HMAC hash of the given password.
-
-        - verify_pbkdf2_hmac(password, salt_hex, hash_hex, iterations, algorithm) -> Result
-            Verify a PBKDF2 HMAC hash of the given password.
-
-        - insert_at_intervals(data, interval, insert, at_start) -> Result
-            Insert a specified element into a list or string at regular intervals.
-
-        - find_keys_by_value(dict_obj, threshold, comparison, nested) -> Result
-            Find keys in a dictionary based on value comparisons.
+    General-purpose helper functions used across the package.
     """
 
     def __init__(self, is_logging_enabled: bool=False,
@@ -38,7 +19,7 @@ class Utils:
                  logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
                  log_instance: Optional[Log]=None):
         """
-        Initialize Utils class.
+        Initialize the utility helper.
         """
         # Initialize Paths
         self._BASE_DIR = Path(base_dir or Path.cwd())
@@ -65,7 +46,7 @@ class Utils:
     # Internal Methods
     def _check_pbkdf2_params(self, password: str, algorithm: str, iterations: int, salt_size: int = 32) -> None:
         """
-        Check parameters for PBKDF2 HMAC functions.
+        Validate parameters used by the PBKDF2 helpers.
 
         Args:
             `password` : The password string.
@@ -77,9 +58,9 @@ class Utils:
             ValueError: If any parameter is invalid.
 
         Example:
-            >>> I'm Not recommending to call this method directly, It's for internal use.
+            >>> # Internal helper; typically not called directly.
             >>> utils = Utils()
-            >>> utils._check_pdkdf2_params("my_password", "sha256", 100000, 32)
+            >>> utils._check_pbkdf2_params("my_password", "sha256", 100000, 32)
             >>> # No exception raised for valid parameters.
         """
         if not isinstance(password, str):
@@ -93,7 +74,8 @@ class Utils:
 
     def _lookup_dict(self, dict_obj: Dict, threshold: Union[int, float, str, bool], comparison_func: Callable, comparison_type: str, nested: bool = False, separator: str = "/" , return_mod: str = "flat", prefix_marker: str = "") -> Union[List[Union[str, Dict]], Tuple[Union[str, Dict], ...]]:
         """
-        Helper method to recursively look up keys in a dictionary based on a comparison function.
+        Recursively search a dictionary for keys whose values match a
+        comparison rule.
 
         Args:
             `dict_obj` : The dictionary to search.
@@ -101,20 +83,23 @@ class Utils:
             `comparison_func` : A callable that takes a value and returns True if it meets the condition.
             `comparison_type` : The type of comparison being performed.
             `nested` : If True, search within nested dictionaries.
-            `separator` : A string to prefix nested keys with. Defaults to "/". (If "tuple", returns tuple, if "list", returns list)
+            `separator` : Separator used for nested path output. Defaults to
+                `"/"`. If set to `"tuple"`, the method returns a tuple.
             `return_mod` : The mode of return format.
-                - "flat": Return a list of keys only. If nested, don't include parent keys. DO NOT USE FOR NESTED KEYS.
+                - "flat": Return a list of keys only. If nested, parent keys
+                  are not included.
                 - "forest": Return a list of dicts with key-value pairs.
-                - "path": Returns a list of full paths with separators
-            `prefix_marker` : DO NOT USE, for internal use only to mark nested keys.
+                - "path": Return a list of full paths joined by `separator`.
+            `prefix_marker` : Internal prefix marker used while traversing
+                nested dictionaries.
 
         Returns:
-            A list of keys that meet the comparison criteria.
+            A collection of keys that meet the comparison criteria.
 
         Example:
-            >>> # I'm not recommending to call this method directly, it's for internal use.
-            >>> my_dict = {'a': 10, 'b': 20, 'c': 30}
-            >>> found_keys = app_core._lookup_dict(my_dict, threshold=20, comparison_func=lambda x: x > 20, comparison_type='gt', nested=False)
+            >>> # Internal helper; typically not called directly.
+            >>> my_dict = {"a": 10, "b": 20, "c": 30}
+            >>> found_keys = utils._lookup_dict(my_dict, threshold=20, comparison_func=lambda x: x > 20, comparison_type='gt', nested=False)
             >>> print(found_keys)  # Output: ['c']
         """
         found_keys = []
@@ -146,15 +131,17 @@ class Utils:
         return tuple(found_keys) if separator == "tuple" else found_keys
 
     # external Methods
-    def str_to_path(self, path_str: str) -> Path:
+    def str_to_path(self, path_str: str) -> Result:
         """
-        Convert a string to a Path object.
+        Convert a string to a `Path` object.
 
         Args:
-            `path_str` : The string representation of the path.
+            `path_str` : String representation of the path. Non-string values
+                are returned unchanged.
 
         Returns:
-            Result: A Result object containing the Path object.
+            Result: A Result object containing the converted `Path`, or the
+                original value if `path_str` is not a string.
 
         Example:
             >>> result = utils.str_to_path("/home/user/documents")
@@ -174,25 +161,25 @@ class Utils:
 
     def hashing(self, data: str, algorithm: str='sha256') -> Result:
         """
-        Encrypt a string using the specified algorithm.
-        Supported algorithms: 'md5', 'sha1', 'sha256', 'sha512'
+        Hash a string using the specified algorithm.
+        Supported algorithms: `md5`, `sha1`, `sha256`, `sha512`
 
         **WARNING**:
             - Hashing is not encryption. Hashing is a one-way function and cannot be reversed.
             - md5 and sha1 are considered weak and not recommended for security-sensitive applications.
 
         Args:
-            `data` : The string to encrypt.
+            `data` : The string to hash.
             `algorithm` : The hashing algorithm to use. Defaults to 'sha256'
 
         Returns:
-            Result: A Result object containing the encrypted string in hexadecimal format.
+            Result: A Result object containing the hashed string in hexadecimal format.
 
         Example:
-            >>> result = utils.encrypt("my_secret_data", algorithm='sha256')
+            >>> result = utils.hashing("my_secret_data", algorithm='sha256')
             >>> if result.success:
-            >>>     encrypted_data = result.data
-            >>>     print(encrypted_data)
+            >>>     hashed_data = result.data
+            >>>     print(hashed_data)
             >>> else:
             >>>     print(result.error)
         """
@@ -204,20 +191,21 @@ class Utils:
 
             hash_func = getattr(hashlib, algorithm)()
             hash_func.update(data.encode('utf-8'))
-            encrypted_data = hash_func.hexdigest()
+            hashed_data = hash_func.hexdigest()
 
-            self._log("INFO", f"Data encrypted using {algorithm}.")
-            return Result(True, None, None, encrypted_data)
+            self._log("INFO", f"Data hashed using {algorithm}.")
+            return Result(True, None, None, hashed_data)
         except Exception as e:
-            self._log("ERROR", f"Encryption failed: {e}")
+            self._log("ERROR", f"Hashing failed: {e}")
             return self._exception_tracker.get_exception_return(e)
 
     def pbkdf2_hmac(self, password: str, algorithm: str, iterations: int, salt_size: int) -> Result:
         """
-        Generate a PBKDF2 HMAC hash of the given password.
-        Supported algorithms: 'sha1', 'sha256', 'sha512'
+        Generate a PBKDF2-HMAC password hash.
+        Supported algorithms: `sha1`, `sha256`, `sha512`
 
-        This function returns a dict containing the salt (hex), hash (hex), iterations, and algorithm used.
+        The returned payload contains the salt, derived hash, iteration count,
+        and algorithm name.
 
         Args:
             `password` : The password string.
@@ -226,7 +214,8 @@ class Utils:
             `salt_size` : Size of the salt in bytes.
 
         Returns:
-            Result: A Result object containing a dict with the following keys:
+            Result: A Result object containing a dictionary with
+                `salt_hex`, `hash_hex`, `iterations`, and `algorithm`.
 
         Example:
             >>> result = utils.pbkdf2_hmac("my_password", "sha256", 100000, 32)
@@ -259,10 +248,10 @@ class Utils:
 
     def verify_pbkdf2_hmac(self, password: str, salt_hex: str, hash_hex: str, iterations: int, algorithm: str) -> Result:
         """
-        Verify a PBKDF2 HMAC hash of the given password.
-        Supported algorithms: 'sha1', 'sha256', 'sha512'
+        Verify a PBKDF2-HMAC password hash.
+        Supported algorithms: `sha1`, `sha256`, `sha512`
 
-        This function returns True if the password matches the hash, False otherwise.
+        Returns `True` if the password matches the hash and `False` otherwise.
 
         Args:
             `password` : The password string to verify.
@@ -294,10 +283,10 @@ class Utils:
                 raise ValueError("salt_hex and hash_hex must be strings")
 
             salt = bytes.fromhex(salt_hex)
-            excepted_hash = bytes.fromhex(hash_hex)
+            expected_hash = bytes.fromhex(hash_hex)
             hash_bytes = hashlib.pbkdf2_hmac(algorithm, password.encode('utf-8'), salt, iterations)
 
-            is_valid = secrets.compare_digest(hash_bytes, excepted_hash)
+            is_valid = secrets.compare_digest(hash_bytes, expected_hash)
             self._log("INFO", f"PBKDF2 HMAC hash verification using {algorithm} with {iterations} iterations. Result: {is_valid}")
             return Result(True, None, None, is_valid)
         except Exception as e:
@@ -311,8 +300,10 @@ class Utils:
         Args:
             `data` : The original list or string where elements will be inserted.
             `interval` : The interval at which to insert the element. (must be a positive integer)
-            `insert` : The element to insert into the list or string. (if data is a string, using object like callable is not recommended as it will be converted to string)
-            `at_start` : If True, insertion starts at the beginning (index 0). If False, insertion starts after the first interval. Defaults to True.
+            `insert` : Element to insert into the list or string. If `data` is
+                a string, the value is converted to text before joining.
+            `at_start` : If `True`, insertion starts at index `0`. If `False`,
+                insertion starts after the first interval.
 
         Returns:
             Result: A Result object containing the modified list or string.
@@ -361,27 +352,30 @@ class Utils:
 
     def find_keys_by_value(self, dict_obj: Dict, threshold: Union[int, float, str, bool],  comparison: str='eq', nested: bool=False, separator: str = "/", return_mod: str = "flat") -> Result:
         """
-        Find keys in dict_obj where their values meet the threshold based on the comparison operator.
+        Find dictionary keys whose values satisfy a comparison rule.
 
-        [bool, str] - [int, float] comparisons are only supported for 'eq' and 'ne'.
+        Cross-type comparisons such as `[bool, str]` vs. `[int, float]` are
+        only supported for `eq` and `ne`.
 
         Args:
             `dict_obj` : The dictionary to search.
             `threshold` : The value to compare against.
-            `comparison` : The comparison operator as a string. Default is 'eq' (equal).
+            `comparison` : Comparison operator. Defaults to `eq`.
             `nested` : If True, search within nested dictionaries.
-            `separator` : The string to prepend to keys for nested dictionaries (default: "/"). ( If "tuple", returns tuple, if "list", returns list )
+            `separator` : Separator used for nested dictionary output.
+                Default: `"/"`. If set to `"tuple"`, the method returns a
+                tuple.
             `return_mod` : The mode of return format.
                 - **"flat"**: Return a list of keys only.
                 - **"forest"**: Return a list of dicts with key-value pairs.
-                - **"path"**: Returns a list of full paths with separators
+                - **"path"**: Return a list of full paths joined by `separator`
 
         Returns:
-            A list of keys that meet the comparison criteria.
+            Result: A Result object containing the matching keys.
 
         Example:
             >>> my_dict = {'a': 10, 'b': 20, 'c': 30}
-            >>> result = app_core.find_keys_by_value(my_dict, threshold=20, comparison='gt', nested=False)
+            >>> result = utils.find_keys_by_value(my_dict, threshold=20, comparison='gt', nested=False)
             >>> print(result.data)  # Output: ['c']
 
         Supported comparison operators:
