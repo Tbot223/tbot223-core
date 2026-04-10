@@ -15,6 +15,7 @@ from tbot223_core.Result import Result
 from tbot223_core.Exception import ExceptionTracker
 from tbot223_core.FileManager import FileManager
 from tbot223_core.LogSys import LoggerManager, Log
+from tbot223_core._default_init import DefaultInit
 
 class AppCore:
     """
@@ -63,19 +64,11 @@ class AppCore:
         self._LANG_DIR = self._PARENT_DIR / "Languages"
         Path.mkdir(self._LANG_DIR, exist_ok=True)
 
-        # Initialize Flags
-        self.__is_logging_enabled__ = is_logging_enabled
-        self.is_debug_enabled = is_debug_enabled
+        DefaultInit.run(self, 
+                        is_logging_enabled =is_logging_enabled, 
+                        is_debug_enabled=is_debug_enabled, 
+                        base_dir=self._PARENT_DIR / "logs", second_log_dir="app_core", logger_name="AppCoreLogger", log_level="AUTO")
 
-        # Initialize classes
-        self._exception_tracker = ExceptionTracker()
-        self._logger_manager = None
-        self.logger = None
-        if self.__is_logging_enabled__:
-            self._logger_manager = logger_manager_instance or LoggerManager(base_dir=self._PARENT_DIR / "logs", second_log_dir="app_core")
-            self._logger_manager.make_logger("AppCoreLogger")
-            self.logger = logger or self._logger_manager.get_logger("AppCoreLogger").data
-        self.log = log_instance or Log(logger=self.logger)
         self._file_manager  = filemanager or FileManager(is_logging_enabled=False, base_dir=self._PARENT_DIR)
 
         # Initialize internal variables
@@ -87,10 +80,6 @@ class AppCore:
             self._log("WARNING", "No language files found in Languages directory.")
 
         self._log("INFO", f"AppCore initialized. Supported languages: {self._supported_langs}")
-
-    def _log(self, level: str, message: str) -> None:
-        if self.__is_logging_enabled__:
-            self.log.log_message(level, message)
 
     # internal Methods
     @staticmethod
