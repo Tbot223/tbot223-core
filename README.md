@@ -7,7 +7,10 @@
 <details>
 <summary>Table of Contents</summary>
 
+- [Who This Is For](#who-this-is-for)
+- [Not For Everyone](#not-for-everyone)
 - [Why tbot223-core?](#why-tbot223-core)
+- [Design Tradeoffs](#design-tradeoffs)
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -15,6 +18,7 @@
 - [Core Modules](#core-modules)
 - [The Result Pattern](#the-result-pattern)
 - [Examples](#examples)
+- [Version Policy](#version-policy)
 - [Documentation](#documentation)
 - [License](#license)
 - [Links](#links)
@@ -23,6 +27,18 @@
 A zero-dependency Python toolkit for file operations, logging, exception tracking, and parallel execution, built around a Result pattern for predictable error handling.
 
 [한국어 (Korean)](README.ko.md)
+
+## Who This Is For
+
+- Scripts, automation, and internal tools that benefit from predictable success/failure handling
+- Codebases that prefer checking return values over catching exceptions at every call site
+- Teams that want file operations, logging, exception tracking, and execution helpers to follow one consistent return shape
+
+## Not For Everyone
+
+- If you want a fully exception-first, idiomatic Python API surface
+- If you prefer very small, single-purpose libraries over a bundled toolkit
+- If you want failures to interrupt control flow by default instead of being handled as values
 
 ## Why tbot223-core?
 
@@ -39,6 +55,12 @@ This package is a good fit if you:
 - Prefer a consistent return shape over unexpected runtime tracebacks
 
 This library follows an explicit success/failure pattern rather than Python's traditional exception-driven style.
+
+## Design Tradeoffs
+
+- Public APIs favor a consistent `Result` shape over Python's usual raise-on-failure style
+- Callers write a little more branching code up front, but error handling becomes more predictable and easier to standardize
+- The library intentionally groups several utilities under one package so internal tools can share the same patterns across file I/O, logging, exception tracking, and parallel work
 
 ## Features
 
@@ -219,6 +241,12 @@ Each script is self-contained and prints `TEST COMPLETE` on success.
 | DecoratorUtils | Runtime measurement |
 
 See [Examples.md](docs/Examples.md) for a full listing with descriptions.
+
+## Version Policy
+
+- The `4.x` line aims to keep public behavior stable unless a change clearly fixes broken or misleading behavior
+- Breaking changes are called out explicitly in the [Release Notes](docs/RELEASE_NOTES.md) and [Migration Guide](docs/MIGRATION_GUIDE.md)
+- Deprecation aliases may remain for compatibility, but new code should follow the current documented names and semantics
 
 ## Documentation
 
