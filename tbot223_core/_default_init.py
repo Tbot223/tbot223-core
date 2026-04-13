@@ -1,28 +1,48 @@
 # external Modules
-import logging
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Optional, Union, Any
 from pathlib import Path
+import logging
 
 # internal Modules
 from tbot223_core.Exception import ExceptionTracker
-from tbot223_core.LogSys import *
+from tbot223_core.LogSys import SimpleSetting
 
 class DefaultInit:
     """
-    A callable class that initializes a target instance with logging and exception tracking capabilities.
-    When called, it sets up the target instance with an ExceptionTracker and logging utilities based on the provided parameters.
+    A class designed to provide a standardized way to initialize instances with logging and exception tracking capabilities.
 
-    Use this class to easily integrate logging and exception tracking into any target instance by simply calling the DefaultInit instance with the appropriate parameters.
+    Use this class to easily add logging and exception tracking to any instance by simply calling it with the appropriate parameters.
 
-    DO NOT INSTANTIATE THIS CLASS DIRECTLY. Instead, use it as a callable to initialize your target instance.
+    This class only provides the `run` method, which is a static method that can be called without creating an instance of `DefaultInit`.
+    So, DO NOT create an instance of `DefaultInit` to use it. Instead, call the `run` method directly on the class, passing the target instance and the necessary parameters.
+
+    Example:
+        >>> # Correct usage
+        >>> DefaultInit.run(target_instance=my_instance, 
+                            is_logging_enabled=True, 
+                            is_debug_enabled=False, 
+                            base_dir="./logs", 
+                            second_log_dir="./backup_logs", 
+                            logger_name="my_logger", 
+                            log_level=logging.INFO)
+        >>> # This will initialize `my_instance` with logging enabled, using the specified directories and logger name, and set up exception tracking.
+        >>> # Incorrect usage (DO NOT create an instance of DefaultInit)
+        >>> default_init = DefaultInit()  # This is not necessary and not recommended
+        >>> default_init.run(target_instance=my_instance,
+                            is_logging_enabled=True, 
+                            is_debug_enabled=False, 
+                            base_dir="./logs", 
+                            second_log_dir="./backup_logs", 
+                            logger_name="my_logger", 
+                            log_level=logging.INFO)
+        >>> # This works, but is discouraged. Always call `run` directly on the class.
     """
     @staticmethod
     def run(target_instance: Any,
             is_logging_enabled: bool, is_debug_enabled: bool,
             base_dir: Optional[Union[str, Path]] = None, second_log_dir: Optional[str] = None, logger_name: Optional[str] = None, log_level: Union[int, str] = logging.INFO,
             
-            ExceptionTracker=ExceptionTracker, SimpleSetting=SimpleSetting,
-            LoggerManager=LoggerManager, Logger=logging.getLogger, log=Log
+            ExceptionTracker=ExceptionTracker, SimpleSetting=SimpleSetting
             ) -> None:
         """
         A callable class that initializes a target instance with logging and exception tracking capabilities.
@@ -30,7 +50,7 @@ class DefaultInit:
 
         - **(R) = Required argument**
         - **(O) = Optional argument (has a default value)**
-        - **(D) = Dependency (can be overridden)**
+        - **(D) = Dependency Injection (advanced usage)**
 
         Args:
             (R)`target_instance`: The instance to be initialized with logging and exception tracking.
@@ -39,23 +59,19 @@ class DefaultInit:
             (O)`base_dir` (str): Base directory for log files.
             (O)`second_log_dir` (str): Secondary directory for log files.
             (O)`logger_name` (str): Name of the logger to be used.
-            (O)`log_level` (int): Logging level (e.g., `logging.INFO`, `logging.DEBUG`). if `is_debug_enabled` is True, log_level must be set to `logging.DEBUG` or lower.
+            (O)`log_level` (int): Logging level (e.g., `logging.INFO`, `logging.DEBUG`). When `is_debug_enabled=True`, `log_level` must allow DEBUG-level logging (i.e., DEBUG or more verbose).
                 - If `log_level` is set to `"AUTO"`, it will automatically be set to `logging.DEBUG` if `is_debug_enabled` is True, otherwise it will be set to `logging.INFO`.
 
             (D)`ExceptionTracker`: The ExceptionTracker class to be used for tracking exceptions.
             (D)`SimpleSetting`: The SimpleSetting class to be used for configuring logging settings.
-            (D)`LoggerManager`: The LoggerManager class to be used for managing loggers.
-            (D)`Logger`: The Logger class to be used for logging.
-            (D)`log`: The Log class to be used for logging messages.  
 
         Note:
             - if `is_logging_enabled` is set to True, base_dir, second_log_dir, logger_name, and log_level must be provided.
             - if `is_logging_enabled` is False, logging will be disabled regardless of the values of base_dir, second_log_dir, logger_name, and log_level.
             - if `is_debug_enabled` is set to True, logging must be enabled, and log_level must be set to logging.DEBUG or lower.
             - This class is designed to be flexible and can be used in various contexts where logging and exception tracking are needed. 
-            It allows for easy integration of logging capabilities into any target instance by simply calling the DefaultInit instance with the appropriate parameters.
 
-        Results:
+        Initialized Attributes on `target_instance`:
             target_instance will be initialized with the following attributes:
             - `_is_logging_enabled` (bool): Indicates whether logging is enabled.
             - `_is_debug_enabled` (bool): Indicates whether debug mode is enabled.
@@ -66,8 +82,7 @@ class DefaultInit:
         
         Example:
             >>> # Normal usage
-            >>> default_init = DefaultInit()
-            >>> default_init(target_instance=my_instance, 
+            >>> DefaultInit.run(target_instance=my_instance, 
                             is_logging_enabled=True, 
                             is_debug_enabled=False, 
                             base_dir="./logs", 
@@ -110,4 +125,4 @@ class DefaultInit:
         target_instance.logger = tmp[2]
 
         # Set the _log method on the target instance
-        target_instance._log = lambda level, message: target_instance.log.log_message(level, message) if target_instance._is_logging_enabled else None
+        target_instance._log = lambda level, message: target_instance.log.log_message(level, message) if target_instance._is_logging_enabled else lambda *args, **kwargs: None

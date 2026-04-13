@@ -23,14 +23,7 @@ class AppCore:
     control, and interactive CLI input.
 
     Attributes:
-        is_logging_enabled (bool): Flag to enable or disable logging.
-        is_debug_enabled (bool): Flag to enable or disable debug mode.
-        default_lang (str): Default language code for localization. (Fallback language)
-        base_dir (Union[str, Path]): Base directory for the application.
-        logger_manager_instance (LogSys.LoggerManager): Instance of LoggerManager for logging.
-        logger (logging.Logger): Logger instance for logging messages.
-        log_instance (LogSys.Log): Instance of Log for logging messages.
-        filemanager (FileManager.FileManager): Instance of FileManager for file operations.
+
 
     Methods:
         thread_pool_executor(data, workers, override, timeout) -> Result:
@@ -54,22 +47,43 @@ class AppCore:
             Returns only on failure.
     """
 
-    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, default_lang: str="en",
+    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
+                 default_lang: str="en",
                  base_dir: Union[str, Path]=None,
-                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
-                 log_instance: Optional[Log]=None, filemanager: Optional[FileManager]=None):
+
+                 DefaultInit: Optional[DefaultInit]=DefaultInit,
+                 FileManager: Optional[FileManager]=FileManager):
+        """
+        Initialize the AppCore instance with logging, exception tracking, and language support.
+
+        - **(R) = Required argument**
+        - **(O) = Optional argument (has a default value)**
+        - **(D) = Dependency Injection (advanced usage)**
+    
+        Args:
+            (O)`is_logging_enabled` (bool): Flag to enable or disable logging. Default is True
+            (O)`is_debug_enabled` (bool): Flag to enable or disable debug mode. Default is False
+            (O)`default_lang` (str): The default language code to use for localization. Default is
+                "en".
+            (O)`base_dir` (Union[str, Path]): Base directory for log files and language files. Default is
+                the current working directory.
+
+            (D)`filemanager` (Optional[FileManager]): An optional FileManager instance to use for file operations.
+                If not provided, a new instance will be created.
+
+        """
 
         # Initialize paths
         self._PARENT_DIR = Path(base_dir) if base_dir is not None else Path.cwd()
         self._LANG_DIR = self._PARENT_DIR / "Languages"
         Path.mkdir(self._LANG_DIR, exist_ok=True)
 
+        # Initialize logging and exception tracking using DefaultInit
         DefaultInit.run(self, 
                         is_logging_enabled =is_logging_enabled, 
                         is_debug_enabled=is_debug_enabled, 
                         base_dir=self._PARENT_DIR / "logs", second_log_dir="app_core", logger_name="AppCoreLogger", log_level="AUTO")
-
-        self._file_manager  = filemanager or FileManager(is_logging_enabled=False, base_dir=self._PARENT_DIR)
+        self._file_manager  = FileManager or FileManager(is_logging_enabled=False, base_dir=self._PARENT_DIR)
 
         # Initialize internal variables
         self._lang_cache = {}
