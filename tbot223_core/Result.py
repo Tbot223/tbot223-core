@@ -32,7 +32,7 @@ class ResultUnwrapException(RuntimeError):
         self.error = error
         self.context = context
         self.data = data
-        
+
 class Result(NamedTuple):
     """
     Immutable container that represents the outcome of an operation.
@@ -129,7 +129,7 @@ class Result(NamedTuple):
         if error_message is None and self.success is None:
             error_message = "Operation was cancelled or not executed."
         raise ResultUnwrapException(error_message, self.context, self.data)
-    
+
     def unwrap_or(self, default: Any) -> Any:
         """
         Return the contained `data` if successful; otherwise return `default`.

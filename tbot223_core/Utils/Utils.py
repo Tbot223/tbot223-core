@@ -1,8 +1,9 @@
 # external Modules
-import hashlib, secrets
+import hashlib
+import secrets
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 # internal Modules
 from tbot223_core.Exception import ExceptionTracker
@@ -15,7 +16,7 @@ class Utils:
     """
 
     def __init__(self, is_logging_enabled: bool=False,
-                 base_dir: Union[str, Path]=None,
+                 base_dir: Optional[Union[str, Path]]=None,
                  logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
                  log_instance: Optional[Log]=None):
         """
@@ -25,7 +26,7 @@ class Utils:
         self._BASE_DIR = Path(base_dir or Path.cwd())
 
         # Initialize Flags
-        object.__setattr__(self, '__is_logging_enabled__', is_logging_enabled)
+        self.__is_logging_enabled__ = is_logging_enabled
 
         # Initialize Classes
         self._exception_tracker = ExceptionTracker()
@@ -35,7 +36,7 @@ class Utils:
             self._logger_manager = logger_manager_instance or LoggerManager(base_dir=self._BASE_DIR / "logs", second_log_dir="utils")
             self._logger_manager.make_logger("UtilsLogger")
             self._logger = logger or self._logger_manager.get_logger("UtilsLogger").data
-        self.log = log_instance or Log(logger=self._logger)
+        self.log = log_instance or Log(logger=cast(logging.Logger, self._logger))
 
         self._log("INFO", "Utils initialized.")
 

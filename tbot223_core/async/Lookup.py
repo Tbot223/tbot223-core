@@ -1,10 +1,10 @@
 # external Modules
 import secrets
-from typing import Any, AsyncGenerator, Callable, Generator, Tuple, Union
+from typing import Any, AsyncGenerator, Callable, Tuple, Union
 
 # internal Modules
-import Result
-
+from tbot223_core.Result import Result
+from tbot223_core._default_init import DefaultInit
 
 class LookupDictHelper:
     @staticmethod
@@ -58,10 +58,27 @@ class LookupDictHelper:
                 return False
         return True
 
+    @staticmethod
+    def _get_comparator_by_key(comparison: str):
+        pass
+
+    @staticmethod
+    def _get_comparator_by_value(comparison: str):
+        pass
 
 class LookupDict(LookupDictHelper):
-    def __init__(self):
-        pass
+    def __init__(self, is_logging_enabled: bool = False, is_debug_enabled: bool = False):
+        """
+        Initializes the LookupDict instance.
+
+        Args:
+            is_logging_enabled (bool): Whether logging is enabled.
+            is_debug_enabled (bool): Whether debug mode is enabled.
+
+        Returns:
+            None
+        """
+        DefaultInit.run(self, is_logging_enabled, is_debug_enabled)
 
     # interal Methods
     @staticmethod
@@ -94,8 +111,9 @@ class LookupDict(LookupDictHelper):
         keys = dictionary.keys()
         ids = LookupDictHelper._secure_random_string(len(keys), 16)
 
-        for key, id_val in zip(keys, ids):
-            key_to_find[key] = f"<NOT FOUND VALUE. identifier={id_val}>"
+        if safety[0]:
+            for key, id_val in zip(keys, ids):
+                key_to_find[key] = f"<NOT FOUND VALUE. identifier={id_val}>"
 
         for key, value in dictionary.items():
             is_nested_dict = nested and isinstance(value, dict)
@@ -197,58 +215,70 @@ class LookupDict(LookupDictHelper):
         return imutable_finds if safety[1] else finds
 
     @staticmethod
-    async def _find_value_by_key(
+    async def _generic_compare(
         dictionary: dict,
-        comparator: Callable[[Any], bool],
+        threshold: Any,
+        return_mode: str = "PATH",
         nested: bool = False,
-        return_mode: str = "VALUE",
         separator: str = "//",
         safety: Tuple[bool, bool] = (False, False),
-        path_prefix: str = "",
-        identifier: str = "",
-    ) -> list:
-        """
-        Inverse of _generic_finder. Applies comparator to keys and returns matching values.
+        target: str = "VALUE",
+    ):
+        pass
 
-        path_prefix, identifier Not For External Use. Only For Internal Use.
-
-        Return Mode:
-            VALUE [value, value, ...] (RETURN)
-
-            VALUE_PATH [(value, path, priority), ...] (RETURN)
-
-            PATH [(key, path, priority), ...] (RETURN)
-
-            LIST [path, path, ...] (RETURN)
-
-            GENERATOR — Returns the async generator directly (YIELD)
-
-            Safety:
-                safety[0] = Hyper-Safe Mode: Delegated to _generic_finder_generator.
-
-                safety[1] = Hyper-Consistent Mode: Delegated to _generic_finder.
-        """
-        return await LookupDict._generic_finder(
-            dictionary=dictionary,
-            comparator=comparator,
+    # external Methods
+    async def find_key_by_value(
+        self,
+        dictionary: dict,
+        threshold: Any,
+        comparison: str = "eq",
+        return_mode: str = "PATH",
+        nested: bool = False,
+        separator: str = "//",
+        safety: Tuple[bool, bool] = (False, False),
+    ) -> Union[list, Tuple, AsyncGenerator[Tuple[Any, Any, str, int], None]]:
+        comparator = {
+            "eq": lambda x: x == threshold,
+            "ne": lambda x: x != threshold,
+            "gt": lambda x: x > threshold,
+            "lt": lambda x: x < threshold,
+            "ge": lambda x: x >= threshold,
+            "le": lambda x: x <= threshold,
+        }
+        return await self._generic_finder(
+            dictionary,
+            comparator[comparison],
             nested=nested,
             return_mode=return_mode,
             separator=separator,
             safety=safety,
-            path_prefix=path_prefix,
-            identifier=identifier,
-            target="KEY",
+            target="VALUE",
         )
 
-    # external Methods
-    def find_key_by_value(self):
-        pass
-
-    def find_key_by_value_generator(self):
-        pass
-
-    def find_value_by_key(self):
-        pass
-
-    def find_value_by_key_generator(self):
-        pass
+    async def find_value_by_key(
+        self,
+        dictionary: dict,
+        threshold: Any,
+        comparison: str = "eq",
+        return_mode: str = "PATH",
+        nested: bool = False,
+        separator: str = "//",
+        safety: Tuple[bool, bool] = (False, False),
+    ) -> Union[list, Tuple, AsyncGenerator[Tuple[Any, Any, str, int], None]]:
+        comparator = {
+            "eq": lambda x: x == threshold,
+            "ne": lambda x: x != threshold,
+            "gt": lambda x: x > threshold,
+            "lt": lambda x: x < threshold,
+            "ge": lambda x: x >= threshold,
+            "le": lambda x: x <= threshold,
+        }
+        return await self._generic_finder(
+            dictionary,
+            comparator[comparison],
+            nested=nested,
+            return_mode=return_mode,
+            separator=separator,
+            safety=safety,
+            target="KEY",
+        )
