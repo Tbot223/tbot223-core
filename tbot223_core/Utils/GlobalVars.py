@@ -10,6 +10,7 @@ import struct
 from tbot223_core.Result import Result
 from tbot223_core.Exception import ExceptionTracker
 from tbot223_core.LogSys import LoggerManager, Log
+from tbot223_core._default_init import DefaultInit
 
 class GlobalVars:
     """
@@ -64,10 +65,11 @@ class GlobalVars:
 
     _MISSING = object()
 
-    def __init__(self, is_logging_enabled: bool=False, base_dir: Union[str, Path]=None,
+    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
+                 base_dir: Union[str, Path]=None,
                  shared_memory_cache_max_size: int=5,
-                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
-                 log_instance: Optional[Log]=None):
+                 DefaultInit: Optional[DefaultInit]=DefaultInit
+                 ):
 
         # Set initialization flag to bypass __setattr__ during __init__
         object.__setattr__(self, '__initializing__', True)
@@ -81,14 +83,11 @@ class GlobalVars:
         self.__is_logging_enabled__ = is_logging_enabled
 
         # Initialize Classes
-        self._exception_tracker = ExceptionTracker()
-        self._logger_manager = None
-        self._logger = None
-        if self.__is_logging_enabled__:
-            self._logger_manager = logger_manager_instance or LoggerManager(base_dir=self._BASE_DIR / "logs", second_log_dir="global_vars")
-            self._logger_manager.make_logger("GlobalVarsLogger")
-            self._logger = logger or self._logger_manager.get_logger("GlobalVarsLogger").data
-        self.log = log_instance or Log(logger=self._logger)
+        DefaultInit.run(self, 
+            is_logging_enabled=is_logging_enabled, 
+            is_debug_enabled=is_debug_enabled, 
+            base_dir=self._BASE_DIR / "logs", second_log_dir="Utils.GlobalVars", logger_name="Utils.GlobalVarsLogger", log_level="AUTO"
+        )
 
         # Shared Memory Attributes
         self.__shm_name__ = set()
@@ -110,9 +109,7 @@ class GlobalVars:
         # Initialization complete
         object.__setattr__(self, '__initializing__', False)
 
-    def _log(self, level: str, message: str) -> None:
-        if self.__is_logging_enabled__:
-            self.log.log_message(level, message)
+        self._log("INFO", "GlobalVars initialized.")
 
     def set(self, key: str, value: object, overwrite: bool=False) -> Result:
         """

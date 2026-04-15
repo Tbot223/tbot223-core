@@ -18,6 +18,7 @@ from tbot223_core.Result import Result
 from tbot223_core.Exception import ExceptionTracker
 from tbot223_core.LogSys import LoggerManager, Log
 from tbot223_core.Utils.Utils import Utils
+from tbot223_core._default_init import DefaultInit
 
 class FileManager:
     """
@@ -28,34 +29,43 @@ class FileManager:
     # File locking threshold: files larger than this size will be locked during read operations
     LOCK_FILE_SIZE_THRESHOLD = 10 * 1024 * 1024  # 10 MB
 
-    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False,
+    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
                  base_dir: Union[str, Path]=None,
-                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
-                 log_instance: Optional[Log]=None, Utils_instance: Optional[Utils]=None):
+
+                 DefaultInit: Optional[DefaultInit]=DefaultInit,
+                 Utils: Optional[Utils]=Utils
+                 ):
+        """
+        Initialize the AppCore instance with logging, exception tracking, and language support.
+
+        - **(R) = Required argument**
+        - **(O) = Optional argument (has a default value)**
+        - **(D) = Dependency Injection (advanced usage)**
+    
+        Args:
+            (O)`is_logging_enabled` (bool): Flag to enable or disable logging. Default is True
+            (O)`is_debug_enabled` (bool): Flag to enable or disable debug mode. Default is False
+            (O)`default_lang` (str): The default language code to use for localization. Default is
+                "en".
+            (O)`base_dir` (Union[str, Path]): Base directory for log files and language files. Default is
+                the current working directory.
+
+        
+
+        """
 
         # Initialize paths
         self._BASE_DIR = Path(base_dir) if base_dir is not None else Path.cwd()
 
-        # Initialize Flags
-        self.__is_logging_enabled__ = is_logging_enabled
-        self.is_debug_enabled = is_debug_enabled
+        # Initialize logging and exception tracking using DefaultInit
+        DefaultInit.run(self, 
+            is_logging_enabled=is_logging_enabled, 
+            is_debug_enabled=is_debug_enabled, 
+            base_dir=self._BASE_DIR / "logs", second_log_dir="file_manager", logger_name="FileManagerLogger", log_level="AUTO"
+        )
+        self._utils = Utils()
 
-        # Initialize classes
-        self._exception_tracker = ExceptionTracker()
-        self._logger_manager = None
-        self.logger = None
-        if self.__is_logging_enabled__:
-            self._logger_manager = logger_manager_instance or LoggerManager(base_dir=self._BASE_DIR / "logs", second_log_dir="file_manager")
-            self._logger_manager.make_logger("FileManagerLogger")
-            self.logger = logger or self._logger_manager.get_logger("FileManagerLogger").data
-        self.log = log_instance or Log(logger=self.logger)
-        self._utils = Utils_instance or Utils()
-
-        self._log("INFO", "FileManager initialized.")
-
-    def _log(self, level: str, message: str) -> None:
-        if self.__is_logging_enabled__:
-            self.log.log_message(level, message)
+        self._log("INFO", f"FileManager initialized.")
 
     # internal Methods
     @staticmethod

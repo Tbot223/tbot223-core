@@ -9,40 +9,32 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 from tbot223_core.Exception import ExceptionTracker
 from tbot223_core.LogSys import LoggerManager, Log
 from tbot223_core.Result import Result
+from tbot223_core._default_init import DefaultInit
 
 class Utils:
     """
     General-purpose helper functions used across the package.
     """
 
-    def __init__(self, is_logging_enabled: bool=False,
-                 base_dir: Optional[Union[str, Path]]=None,
-                 logger_manager_instance: Optional[LoggerManager]=None, logger: Optional[logging.Logger]=None,
-                 log_instance: Optional[Log]=None):
+    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
+                 base_dir: Union[str, Path]=None,
+
+                 DefaultInit: Optional[DefaultInit]=DefaultInit,
+                 ):
         """
         Initialize the utility helper.
         """
         # Initialize Paths
         self._BASE_DIR = Path(base_dir or Path.cwd())
 
-        # Initialize Flags
-        self.__is_logging_enabled__ = is_logging_enabled
-
-        # Initialize Classes
-        self._exception_tracker = ExceptionTracker()
-        self._logger_manager = None
-        self._logger = None
-        if self.__is_logging_enabled__:
-            self._logger_manager = logger_manager_instance or LoggerManager(base_dir=self._BASE_DIR / "logs", second_log_dir="utils")
-            self._logger_manager.make_logger("UtilsLogger")
-            self._logger = logger or self._logger_manager.get_logger("UtilsLogger").data
-        self.log = log_instance or Log(logger=cast(logging.Logger, self._logger))
+        # Initialize logging and exception tracking using DefaultInit
+        DefaultInit.run(self, 
+            is_logging_enabled=is_logging_enabled, 
+            is_debug_enabled=is_debug_enabled, 
+            base_dir=self._BASE_DIR / "logs", second_log_dir="Utils.Utils", logger_name="Utils.UtilsLogger", log_level="AUTO"
+        )
 
         self._log("INFO", "Utils initialized.")
-
-    def _log(self, level: str, message: str) -> None:
-        if self.__is_logging_enabled__:
-            self.log.log_message(level, message)
 
     # Internal Methods
     def _check_pbkdf2_params(self, password: str, algorithm: str, iterations: int, salt_size: int = 32) -> None:

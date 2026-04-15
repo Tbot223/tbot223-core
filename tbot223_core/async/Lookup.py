@@ -1,10 +1,13 @@
 # external Modules
 import secrets
 from typing import Any, AsyncGenerator, Callable, Tuple, Union
+from pathlib import Path
+import time
 
 # internal Modules
 from tbot223_core.Result import Result
 from tbot223_core._default_init import DefaultInit
+from tbot223_core.FileManager import FileManager
 
 class LookupDictHelper:
     @staticmethod
@@ -67,7 +70,10 @@ class LookupDictHelper:
         pass
 
 class LookupDict(LookupDictHelper):
-    def __init__(self, is_logging_enabled: bool = False, is_debug_enabled: bool = False):
+    def __init__(self, 
+                 is_logging_enabled: bool = False, 
+                 is_debug_enabled: bool = False,
+                 FileManager: FileManager = FileManager):
         """
         Initializes the LookupDict instance.
 
@@ -79,17 +85,22 @@ class LookupDict(LookupDictHelper):
             None
         """
         DefaultInit.run(self, is_logging_enabled, is_debug_enabled)
+        self._fm = FileManager(
+            is_logging_enabled=is_logging_enabled,
+            is_debug_enabled=is_debug_enabled,
+            
+        )
 
     # interal Methods
-    @staticmethod
     async def _generic_finder_generator(
+        self,
         dictionary: dict,
         comparator: Callable[[Any], bool],
         nested: bool = False,
         separator: str = "//",
         safety: Tuple[bool, bool] = (False, False),
+        base_dir: Union[str, Path] = None,
         path_prefix: str = "",
-        identifier: str = "",
         depth: int = 0,
         target: str = "VALUE",
     ) -> AsyncGenerator[Tuple[Any, Any, str, int], None]:
@@ -103,17 +114,49 @@ class LookupDict(LookupDictHelper):
             separator (str): The string used to separate keys in the path (default is '//').
             safety (Tuple[bool, bool]): A tuple where the first element enables hyper-safe mode (ensuring all keys are found) and the second element enables hyper-consistent mode (ensuring consistent results across iterations). Default is (False, False).
             path_prefix (str): A prefix to be added to the path of found items (used for nested searches, default is '').
-            identifier (str): An optional identifier for error messages in hyper-safe mode (default is '').
             depth (int): The current depth of the search (used for nested searches, default is 0).
             target (str): Determines whether the comparator is applied to keys ('KEY') or values ('VALUE'). Default is 'VALUE'.
         """
         key_to_find = dict()
         keys = dictionary.keys()
         ids = LookupDictHelper._secure_random_string(len(keys), 16)
+        base_dir = Path(base_dir) if base_dir else Path.cwd() / "lookup_safety"
+        now_time = time.strftime('%Y-%m-%d_%Hh-%Mm-%Ss', time.localtime())
 
         if safety[0]:
+            operation_id = secrets.token_hex(32)
             for key, id_val in zip(keys, ids):
-                key_to_find[key] = f"<NOT FOUND VALUE. identifier={id_val}>"
+                key_to_find[key] = f"<NOT FOUND VALUE. identifier={id_val}. operation_id={operation_id}>"
+    
+        if safety[0]:
+            nested_path = base_dir
+            for path in path_prefix.split(separator)[:-1]:
+                nested_path = nested_path / path
+
+            res = self._fm.write_json(
+                path=nested_path / f"{operation_id}_{now_time}_depth_{depth}.json",
+                data={
+                    "operation_id": operation_id,
+                    "metadata": {
+                        "timestamp": time.time(),
+                        "comparator": comparator.__name__ if hasattr(comparator, "__name__") else str(comparator),
+                        "nested": nested,
+                        "separator": separator,
+                        "safety": safety,
+                        "path_prefix": path_prefix,
+                        "depth": depth,
+                        "target": target,
+                    },
+                    "key_to_find": key_to_find,
+                    "ids": ids,
+                    "keys": list(keys),
+                }
+            )
+
+            if res.success:
+                self._log("INFO", f"Safety check file created at {nested_path / f'{operation_id}_{now_time}_depth_{depth}.json'} for operation_id: {operation_id}")
+            else:
+                self._log("ERROR", f"Failed to create safety check file for operation_id: {operation_id}. Error: {res.error}")
 
         for key, value in dictionary.items():
             is_nested_dict = nested and isinstance(value, dict)
@@ -126,7 +169,6 @@ class LookupDict(LookupDictHelper):
                     separator=separator,
                     safety=safety,
                     path_prefix=path_prefix + key + separator,
-                    identifier=identifier,
                     depth=depth + 1,
                     target=target,
                 ):
@@ -144,14 +186,14 @@ class LookupDict(LookupDictHelper):
                     key_to_find[key] = None
 
         if safety[0]:
-            for key, value in key_to_find.items():
+            for idx, (key, value) in enumerate(key_to_find.items()):
                 if value is not None:
                     raise ValueError(
-                        f"Value for key '{key}' was not found. Identifier: {value}"
+                        f"Value for key '{key}' was not found. Path: {path_prefix + key}. Identifier: {ids[idx]}, Operation ID: {operation_id}"
                     )
 
-    @staticmethod
     async def _generic_finder(
+        self,
         dictionary: dict,
         comparator: Callable[[Any], bool],
         nested: bool = False,
@@ -159,7 +201,6 @@ class LookupDict(LookupDictHelper):
         separator: str = "//",
         safety: Tuple[bool, bool] = (False, False),
         path_prefix: str = "",
-        identifier: str = "",
         target: str = "VALUE",
     ) -> Union[list, Tuple, AsyncGenerator[Tuple[Any, Any, str, int], None]]:
         """
@@ -173,7 +214,6 @@ class LookupDict(LookupDictHelper):
             separator (str): The string used to separate keys in the path (default is '//').
             safety (Tuple[bool, bool]): A tuple where the first element enables hyper-safe mode (ensuring all keys are found) and the second element enables hyper-consistent mode (ensuring consistent results across iterations). Default is (False, False).
             path_prefix (str): A prefix to be added to the path of found items (used for nested searches, default is '').
-            identifier (str): An optional identifier for error messages in hyper-safe mode (default is '').
             target (str): Determines whether the comparator is applied to keys ('KEY') or values ('VALUE'). Default is 'VALUE'.
 
         Returns:
@@ -186,7 +226,6 @@ class LookupDict(LookupDictHelper):
             separator=separator,
             safety=safety,
             path_prefix=path_prefix,
-            identifier=identifier,
             target=target,
         )
 
@@ -214,8 +253,8 @@ class LookupDict(LookupDictHelper):
 
         return imutable_finds if safety[1] else finds
 
-    @staticmethod
     async def _generic_compare(
+        self,
         dictionary: dict,
         threshold: Any,
         return_mode: str = "PATH",
