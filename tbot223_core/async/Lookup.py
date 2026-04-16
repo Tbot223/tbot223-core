@@ -98,7 +98,7 @@ class LookupDict(LookupDictHelper):
         comparator: Callable[[Any], bool],
         nested: bool = False,
         separator: str = "//",
-        safety: Tuple[bool, bool] = (False, False),
+        safety: Tuple[bool, bool, bool] = (False, False, False),
         base_dir: Union[str, Path] = None,
         path_prefix: str = "",
         depth: int = 0,
@@ -107,12 +107,21 @@ class LookupDict(LookupDictHelper):
         """
         Core async generator that performs the lookup operation. Yields results as they are found.
 
+        THIS METHOD IS NOT MEANT TO BE CALLED EXTERNALLY. I DO NOT RESPONSIBLE FOR ANY DAMAGE CAUSED BY MISUSE OF THIS METHOD. USE THE EXTERNAL METHODS INSTEAD.
+
+        Warning:
+            - When using hyper-safe mode, this generator will create a JSON file for each level of the search. Ensure that the base directory has sufficient storage and that the file system can handle the number of files created.
+
         Args:
             dictionary (dict): The dictionary to search through.
             comparator (Callable[[Any], bool]): A function that takes a key or value and returns True if it matches the search criteria.
             nested (bool): Whether to search through nested dictionaries (default is False).
             separator (str): The string used to separate keys in the path (default is '//').
-            safety (Tuple[bool, bool]): A tuple where the first element enables hyper-safe mode (ensuring all keys are found) and the second element enables hyper-consistent mode (ensuring consistent results across iterations). Default is (False, False).
+            safety (Tuple[bool, bool, bool]): A tuple controlling safety features:
+                - `safety[0]` (bool): Hyper-safe mode. Ensures all keys in the dictionary are processed. Raises `ValueError` if any are missed.
+                - `safety[1]` (bool): Hyper-consistent mode. Ensures results are consistent across iterations.
+                - `safety[2]` (bool): Strict audit mode. If `hyper-safe` is on, this flag makes audit file creation mandatory. If the file write fails, a `RuntimeError` is raised.
+                Default is `(False, False, False)`.
             path_prefix (str): A prefix to be added to the path of found items (used for nested searches, default is '').
             depth (int): The current depth of the search (used for nested searches, default is 0).
             target (str): Determines whether the comparator is applied to keys ('KEY') or values ('VALUE'). Default is 'VALUE'.
@@ -156,7 +165,9 @@ class LookupDict(LookupDictHelper):
             if res.success:
                 self._log("INFO", f"Safety check file created at {nested_path / f'{operation_id}_{now_time}_depth_{depth}.json'} for operation_id: {operation_id}")
             else:
-                self._log("ERROR", f"Failed to create safety check file for operation_id: {operation_id}. Error: {res.error}")
+                self._log("ERROR", f"Failed to create safety check file for operation_id: {operation_id}. Error: {res.data}")
+                if len(safety) > 2 and safety[2]:
+                    raise RuntimeError(f"Hyper-safe mode constraint violation: Failed to save safety check file. Details: {res.data}")
 
         for key, value in dictionary.items():
             is_nested_dict = nested and isinstance(value, dict)
@@ -199,7 +210,7 @@ class LookupDict(LookupDictHelper):
         nested: bool = False,
         return_mode: str = "PATH",
         separator: str = "//",
-        safety: Tuple[bool, bool] = (False, False),
+        safety: Tuple[bool, bool, bool] = (False, False, False),
         path_prefix: str = "",
         target: str = "VALUE",
     ) -> Union[list, Tuple, AsyncGenerator[Tuple[Any, Any, str, int], None]]:
@@ -212,7 +223,10 @@ class LookupDict(LookupDictHelper):
             nested (bool): Whether to search through nested dictionaries (default is False).
             return_mode (str): Determines the format of the returned results. Options are 'VALUE', 'VALUE_PATH', 'PATH', 'LIST', and 'GENERATOR'. Default is 'PATH'.
             separator (str): The string used to separate keys in the path (default is '//').
-            safety (Tuple[bool, bool]): A tuple where the first element enables hyper-safe mode (ensuring all keys are found) and the second element enables hyper-consistent mode (ensuring consistent results across iterations). Default is (False, False).
+            safety (Tuple[bool, bool, bool]): A tuple controlling safety features. See `_generic_finder_generator` for details.
+                - `safety[0]`: Hyper-safe mode.
+                - `safety[1]`: Hyper-consistent mode.
+                - `safety[2]`: Strict audit mode.
             path_prefix (str): A prefix to be added to the path of found items (used for nested searches, default is '').
             target (str): Determines whether the comparator is applied to keys ('KEY') or values ('VALUE'). Default is 'VALUE'.
 
@@ -244,7 +258,7 @@ class LookupDict(LookupDictHelper):
                 finds.append(value)
             elif return_mode == "VALUE_PATH":
                 finds.append((value, path, priority))
-            if safety[1]:
+            if len(safety) > 1 and safety[1]:
                 if not LookupDictHelper._consistency_check(imutable_finds, finds):
                     raise ValueError(
                         "Inconsistent results found during hyper-safe lookup."
@@ -260,7 +274,7 @@ class LookupDict(LookupDictHelper):
         return_mode: str = "PATH",
         nested: bool = False,
         separator: str = "//",
-        safety: Tuple[bool, bool] = (False, False),
+        safety: Tuple[bool, bool, bool] = (False, False, False),
         target: str = "VALUE",
     ):
         pass
@@ -274,7 +288,7 @@ class LookupDict(LookupDictHelper):
         return_mode: str = "PATH",
         nested: bool = False,
         separator: str = "//",
-        safety: Tuple[bool, bool] = (False, False),
+        safety: Tuple[bool, bool, bool] = (False, False, False),
     ) -> Union[list, Tuple, AsyncGenerator[Tuple[Any, Any, str, int], None]]:
         comparator = {
             "eq": lambda x: x == threshold,
@@ -302,7 +316,7 @@ class LookupDict(LookupDictHelper):
         return_mode: str = "PATH",
         nested: bool = False,
         separator: str = "//",
-        safety: Tuple[bool, bool] = (False, False),
+        safety: Tuple[bool, bool, bool] = (False, False, False),
     ) -> Union[list, Tuple, AsyncGenerator[Tuple[Any, Any, str, int], None]]:
         comparator = {
             "eq": lambda x: x == threshold,

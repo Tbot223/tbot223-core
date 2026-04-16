@@ -1,5 +1,5 @@
 # external Modules
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, Tuple
 from pathlib import Path
 import logging
 
@@ -41,6 +41,7 @@ class DefaultInit:
     def run(target_instance: Any,
             is_logging_enabled: bool, is_debug_enabled: bool,
             base_dir: Optional[Union[str, Path]] = None, second_log_dir: Optional[str] = None, logger_name: Optional[str] = None, log_level: Union[int, str] = logging.INFO,
+            masking: Optional[Tuple[bool, bool, bool, bool]] = None,
             
             ExceptionTracker=ExceptionTracker, SimpleSetting=SimpleSetting
             ) -> None:
@@ -61,7 +62,9 @@ class DefaultInit:
             (O)`logger_name` (str): Name of the logger to be used.
             (O)`log_level` (int): Logging level (e.g., `logging.INFO`, `logging.DEBUG`). When `is_debug_enabled=True`, `log_level` must allow DEBUG-level logging (i.e., DEBUG or more verbose).
                 - If `log_level` is set to `"AUTO"`, it will automatically be set to `logging.DEBUG` if `is_debug_enabled` is True, otherwise it will be set to `logging.INFO`.
-
+            (O)`masking` (Tuple[bool, bool, bool, bool]): A tuple indicating which types of information to mask in logs. 
+                    - The tuple should contain four boolean values corresponding to (`user_input`, `params`, `traceback`, `computer_info`).
+                
             (D)`ExceptionTracker`: The ExceptionTracker class to be used for tracking exceptions.
             (D)`SimpleSetting`: The SimpleSetting class to be used for configuring logging settings.
 
@@ -113,6 +116,9 @@ class DefaultInit:
         
         # Initialize the exception tracker for the target instance
         target_instance._exception_tracker = ExceptionTracker() 
+
+        # Set masking attribute on the target instance, defaulting to (False, False, False, False) if not provided
+        target_instance.masking = masking if masking is not None else (False, False, False, False)
 
         # Set logging and debug flags on the target instance
         target_instance._is_logging_enabled = is_logging_enabled
