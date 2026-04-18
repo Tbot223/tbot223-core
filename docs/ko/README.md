@@ -1,4 +1,4 @@
-[English](README.md)
+[English](../en/README.md)
 
 > 이 문서는 v4.0.0 기준입니다.
 
@@ -6,7 +6,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/tbot223-core)](https://pypi.org/project/tbot223-core/)
 [![Python](https://img.shields.io/pypi/pyversions/tbot223-core)](https://pypi.org/project/tbot223-core/)
-[![License](https://img.shields.io/pypi/l/tbot223-core)](LICENSE)
+[![License](https://img.shields.io/pypi/l/tbot223-core)](../../LICENSE)
 
 <details>
 <summary>목차</summary>
@@ -26,6 +26,7 @@
 - [문서](#문서)
 - [라이선스](#라이선스)
 - [링크](#링크)
+
 </details>
 
 파이썬 애플리케이션을 위한 의존성 없는 핵심 유틸리티 패키지입니다.
@@ -200,7 +201,7 @@ from tbot223_core.LogSys import SimpleSetting
 | `GlobalVars` | 공유 메모리 IPC를 지원하는 스레드 안전 전역 변수 | `set()`, `get()`, `shm_gen()`, `shm_sync()`, `shm_update()`, `shm_close()` |
 | `DecoratorUtils` | 실행 시간 측정 | `@DecoratorUtils.count_runtime()` |
 
-전체 메서드 시그니처, 파라미터, 반환값은 [API 레퍼런스](docs/API.ko.md)를 참고하세요.
+전체 메서드 시그니처, 파라미터, 반환값은 API 레퍼런스를 참고하세요.
 
 ## Result 객체
 
@@ -229,7 +230,7 @@ Result(
 
 ## 예제
 
-[examples/](examples/) 디렉토리에 모듈별로 정리된 40개 이상의 실행 가능한 스크립트가 있습니다.
+[examples/](../../examples/) 디렉토리에 모듈별로 정리된 40개 이상의 실행 가능한 스크립트가 있습니다.
 각 스크립트는 독립 실행 가능하며 성공 시 `TEST COMPLETE`를 출력합니다.
 
 | 모듈 | 예제 |
@@ -243,27 +244,27 @@ Result(
 | GlobalVars | 기본 CRUD, 속성/호출 문법, 스레드 잠금, 공유 메모리 IPC |
 | DecoratorUtils | 실행 시간 측정 |
 
-전체 목록과 설명은 [예제 문서](docs/Examples.ko.md)를 참고하세요.
+전체 목록과 설명은 [예제 문서](Examples.md)를 참고하세요.
 
 ## 버전 정책
 
 - `4.x` 라인에서는 깨진 동작이나 오해를 부르는 동작을 바로잡는 경우가 아니라면 공개 동작을 최대한 안정적으로 유지하려고 합니다
-- 호환성 파괴 변경은 [릴리스 노트](docs/RELEASE_NOTES.ko.md)와 [마이그레이션 가이드](docs/MIGRATION_GUIDE.ko.md)에 명시합니다
+- 호환성 파괴 변경은 [릴리스 노트](RELEASE_NOTES.md)와 [마이그레이션 가이드](MIGRATION_GUIDE.md)에 명시합니다
 - deprecated alias는 호환성을 위해 남아 있을 수 있지만, 새 코드는 현재 문서의 이름과 의미를 따르는 편이 좋습니다
 
 ## 문서
 
-- [API 레퍼런스](docs/API.ko.md) — 전체 메서드 시그니처, 파라미터, 반환값, 사용 예제
-- [마이그레이션 가이드](docs/MIGRATION_GUIDE.ko.md) — 2.x 또는 3.x에서 4.x로 업그레이드하는 경로 안내
-- [릴리스 노트](docs/RELEASE_NOTES.ko.md) — 변경 이력 및 버전 히스토리
-- [예제 문서](docs/Examples.ko.md) — 40개 이상의 실행 가능한 예제 스크립트 (설명 포함)
+- [API 레퍼런스](API.md) — 전체 메서드 시그니처, 파라미터, 반환값, 사용 예제
+- [마이그레이션 가이드](MIGRATION_GUIDE.md) — 2.x 또는 3.x에서 4.x로 업그레이드하는 경로 안내
+- [릴리스 노트](RELEASE_NOTES.md) — 변경 이력 및 버전 히스토리
+- [예제 문서](Examples.md) — 40개 이상의 실행 가능한 예제 스크립트 (설명 포함)
 
 ## 라이선스
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](../../LICENSE)
 
 ## 링크
 
 - [GitHub](https://github.com/Tbot223/tbot223-core)
 - [PyPI](https://pypi.org/project/tbot223-core/)
-- Author: tbot223 (tbotxyz@gmail.com)
+- Author: tbot223 ([tbotxyz@gmail.com](mailto:tbotxyz@gmail.com))

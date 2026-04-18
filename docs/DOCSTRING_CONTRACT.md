@@ -1,11 +1,19 @@
+> Contract revision: 2026-04-19.
+
 # Docstring Contract Moved
 
-> docstring 계약 문서는 사람용 기준서와 LLM용 작업 지시서로 분리됐다.
+> docstring 계약 문서는 이제 계약 허브 아래에서 관리된다.
+
+## 시작 지점
+
+- 계약 허브: [CONTRACT/README.md](CONTRACT/README.md)
 
 ## 이동 경로
 
-- 사람용 정본: [CONTRACT/FOR_HUMAN/DOCSTRING_CONTRACT.md](CONTRACT/FOR_HUMAN/DOCSTRING_CONTRACT.md)
-- LLM용 실행 문서: [CONTRACT/FOR_LLM/DOCSTRING_CONTRACT.md](CONTRACT/FOR_LLM/DOCSTRING_CONTRACT.md)
+- English: [CONTRACT/en/README.md](CONTRACT/en/README.md)
+- 한국어: [CONTRACT/ko/README.md](CONTRACT/ko/README.md)
+- 사람용 정본(ko): [CONTRACT/ko/FOR_HUMAN/DOCSTRING_CONTRACT.md](CONTRACT/ko/FOR_HUMAN/DOCSTRING_CONTRACT.md)
+- LLM용 실행 문서(ko): [CONTRACT/ko/FOR_LLM/DOCSTRING_CONTRACT.md](CONTRACT/ko/FOR_LLM/DOCSTRING_CONTRACT.md)
 - 개요 문서: [CONTRACT/README.md](CONTRACT/README.md)
 
 ## 메모

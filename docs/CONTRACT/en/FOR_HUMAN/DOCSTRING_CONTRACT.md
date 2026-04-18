@@ -1,3 +1,7 @@
+[한국어 (Korean)](../../ko/FOR_HUMAN/DOCSTRING_CONTRACT.md)
+
+> This document is based on v4.0.0.
+
 # Docstring Contract
 
 > tbot223-core 프로젝트의 Markdown 기반 docstring 양식 계약.
@@ -142,6 +146,7 @@ MD 테이블 형식으로 작성한다.
 ```
 
 **Tag 의미:**
+
 - **(R)** — Required. 기본값이 없는 필수 인자.
 - **(O)** — Optional. 기본값이 있는 선택 인자. Description 끝에 `Default: \`value\`.`을 명시한다.
 - **(D)** — Dependency Injection. 테스트 / 확장을 위한 주입 인자.
@@ -167,6 +172,7 @@ None
 **적용 조건:** `Callable`, 함수 리스트, 콜백, 프로토콜이 인자의 핵심일 때만.
 
 **표현 규칙:**
+
 - 첫 줄에 파라미터명과 전체 타입을 명시한다.
 - 하위 bullet에서 각 타입 요소를 em dash (`—`)로 설명한다.
 - 중첩 Callable은 `(param1: Type, param2: Type) -> ReturnType` 형식으로 풀어 쓴다.

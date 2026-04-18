@@ -1,6 +1,6 @@
 # 릴리스 노트
 
-[English](RELEASE_NOTES.md)
+[English](../en/RELEASE_NOTES.md)
 
 <details>
 <summary>목차</summary>
@@ -37,7 +37,7 @@
 
 ### 변경
 
-- **문서 구조**: 장문 문서를 `docs/` 중심으로 재배치하고, 루트에는 `README.md`와 `README.ko.md`만 남겼습니다.
+- **문서 구조**: 장문 문서를 언어 기준으로 `docs/en/`과 `docs/ko/`에 재배치하고, 루트에는 `README.md`를 유지합니다.
 - **문서 정합성**: README/API/Examples 문서를 현재 런타임 동작에 맞게 다시 썼습니다. executor 반환 형태, `Result` 실패 payload, 로그 경로 의미, 다국어 폴백, bool 파싱, PBKDF2 반환 구조, 공유 메모리 소유권/정리 규칙이 모두 현재 코드 기준으로 설명됩니다.
 - **AppCore**: `workers` 기본값을 import 시점이 아니라 호출 시점에 해석하도록 정리해, 현재 CPU 수를 반영하고 오래된 기본값 문제를 줄였습니다.
 - **테스트/도구**: 레거시 루트 `test.py` 흐름을 정리하고, 유지되는 테스트 진입점을 `TEST/SRC/` pytest 스위트 중심으로 맞췄습니다.

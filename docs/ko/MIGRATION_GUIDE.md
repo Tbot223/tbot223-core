@@ -1,6 +1,10 @@
-# 마이그레이션 가이드
+<!-- markdownlint-disable-file MD041 -->
 
-[English](MIGRATION_GUIDE.md)
+[English](../en/MIGRATION_GUIDE.md)
+
+> 이 문서는 v4.0.0 기준입니다.
+
+# 마이그레이션 가이드
 
 이 가이드는 이제 2.x 계열과 3.x 계열 모두에서 4.x로 올라가는 경로를 함께 다룹니다. 3.x에서 업그레이드한다면 아래 `3.1.1 -> 4.0.0` 섹션부터 보면 되고, 2.x에서 올라간다면 그 섹션과 아래쪽의 `2.x -> 3.0.0` 메이저 업그레이드 섹션을 함께 확인하는 편이 좋습니다.
 
@@ -23,6 +27,7 @@
 - [Result 객체 변경](#result-object-changes)
 - [2.x에서 3.0.0으로 가는 체크리스트](#legacy-checklist)
 - [호환성 참고사항](#compatibility-notes)
+
 </details>
 
 <a id="upgrade-3-1-1-to-4-0-0"></a>
@@ -206,13 +211,18 @@ value = result.expect("configuration is required")
 - `RELEASE_NOTES.md`
 - `examples/Examples.md`
 
-**이후 (4.0.0):**
+**현재 구조:**
 
-- `docs/MIGRATION_GUIDE.md`
-- `docs/RELEASE_NOTES.md`
-- `docs/Examples.md`
+- `docs/en/README.md`
+- `docs/en/MIGRATION_GUIDE.md`
+- `docs/en/RELEASE_NOTES.md`
+- `docs/en/Examples.md`
+- `docs/ko/README.md`
+- `docs/ko/MIGRATION_GUIDE.md`
+- `docs/ko/RELEASE_NOTES.md`
+- `docs/ko/Examples.md`
 
-루트에는 `README.md`와 `README.ko.md`만 그대로 남습니다.
+루트에는 `README.md`만 그대로 남습니다.
 
 **필요한 조치:**
 

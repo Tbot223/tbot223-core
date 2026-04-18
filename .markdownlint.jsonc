@@ -1,0 +1,18 @@
+{
+  // Repository conventions:
+  // - Many docs intentionally start with language links and version metadata before H1.
+  // - details/summary and anchor tags are used for navigation in long-form docs.
+  // - Existing table separator style should not be treated as a blocking warning.
+  "default": true,
+  "MD013": false,
+  "MD022": false,
+  "MD024": {
+    "siblings_only": true
+  },
+  "MD031": false,
+  "MD032": false,
+  "MD033": false,
+  "MD040": false,
+  "MD041": false,
+  "MD060": false
+}

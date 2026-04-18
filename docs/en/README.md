@@ -1,6 +1,6 @@
 <!-- markdownlint-disable-file MD041 -->
 
-[한국어 (Korean)](docs/ko/README.md)
+[한국어 (Korean)](../ko/README.md)
 
 > This document is based on v4.0.0.
 
@@ -8,7 +8,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/tbot223-core)](https://pypi.org/project/tbot223-core/)
 [![Python](https://img.shields.io/pypi/pyversions/tbot223-core)](https://pypi.org/project/tbot223-core/)
-[![License](https://img.shields.io/pypi/l/tbot223-core)](LICENSE)
+[![License](https://img.shields.io/pypi/l/tbot223-core)](../../LICENSE)
 
 <details>
 <summary>Table of Contents</summary>
@@ -48,7 +48,7 @@ A zero-dependency Python toolkit for file operations, logging, exception trackin
 ## Why tbot223-core?
 
 Every public function returns a `Result` object instead of raising exceptions.
-This gives you a consistent, predictable shape for every operation — success or failure.
+This gives you a consistent, predictable shape for every operation - success or failure.
 No more wrapping every call in `try/except`; just check `result.success` or call `.unwrap()`.
 
 The core `Result` type was designed independently; the convenience methods `unwrap()`, `expect()`, and `unwrap_or()` were later inspired by Rust's `Result<T, E>`.
@@ -69,13 +69,13 @@ This library follows an explicit success/failure pattern rather than Python's tr
 
 ## Features
 
-- **Consistent Result Objects** — All functions return a standardized `Result` NamedTuple with `success`, `error`, `context`, and `data` fields
-- **Robust File Management** — Atomic writes (temp file + rename), JSON I/O, file locking for large files, directory operations
-- **Advanced Logging System** — Named loggers with automatic timestamped file organization, configurable levels, and a single-step `SimpleSetting` helper
-- **Exception Tracking** — Source location extraction, full traceback capture, system info caching, sensitive data masking
-- **Parallel Execution** — `ThreadPoolExecutor` and `ProcessPoolExecutor` wrappers with support for timeouts, chunking, and worker limits
-- **Localization Support** — JSON-based localization with internal caching and automatic reloads
-- **Shared Memory IPC** — Process-safe global variables with JSON/pickle serialization, LRU-cached handles, and ownership tracking
+- **Consistent Result Objects** - All functions return a standardized `Result` NamedTuple with `success`, `error`, `context`, and `data` fields
+- **Robust File Management** - Atomic writes (temp file + rename), JSON I/O, file locking for large files, directory operations
+- **Advanced Logging System** - Named loggers with automatic timestamped file organization, configurable levels, and a single-step `SimpleSetting` helper
+- **Exception Tracking** - Source location extraction, full traceback capture, system info caching, sensitive data masking
+- **Parallel Execution** - `ThreadPoolExecutor` and `ProcessPoolExecutor` wrappers with support for timeouts, chunking, and worker limits
+- **Localization Support** - JSON-based localization with internal caching and automatic reloads
+- **Shared Memory IPC** - Process-safe global variables with JSON/pickle serialization, LRU-cached handles, and ownership tracking
 
 ## Installation
 
@@ -94,7 +94,7 @@ from tbot223_core import FileManager
 
 fm = FileManager()
 
-# Every operation returns a Result — no exceptions to catch
+# Every operation returns a Result - no exceptions to catch
 result = fm.write_json("config.json", {"key": "value"})
 
 if result.success:
@@ -102,13 +102,13 @@ if result.success:
 else:
     print(f"Failed: {result.error}")
 
-# unwrap() — returns data on success, raises ResultUnwrapException on failure
+# unwrap() - returns data on success, raises ResultUnwrapException on failure
 data = fm.read_json("config.json").unwrap()
 
-# expect() — like unwrap(), but with a custom error message
+# expect() - like unwrap(), but with a custom error message
 data = fm.read_json("config.json").expect("Config file is required")
 
-# unwrap_or() — returns data on success, or the default value on failure
+# unwrap_or() - returns data on success, or the default value on failure
 data = fm.read_json("missing.json").unwrap_or({"default": True})
 ```
 
@@ -202,7 +202,7 @@ from tbot223_core.LogSys import SimpleSetting
 | `GlobalVars` | Thread-safe global variables with shared memory IPC | `set()`, `get()`, `shm_gen()`, `shm_sync()`, `shm_update()`, `shm_close()` |
 | `DecoratorUtils` | Runtime measurement | `@DecoratorUtils.count_runtime()` |
 
-See [API Reference](docs/en/API.md) for full method signatures, parameters, and return values.
+See [API Reference](API.md) for full method signatures, parameters, and return values.
 
 ## The Result Pattern
 
@@ -222,7 +222,7 @@ On success, `data` contains the returned value. On failure, it may contain `None
 ### Methods
 
 | Method | Behavior on success | Behavior on failure |
-|--------|-------------------|-------------------|
+|--------|---------------------|---------------------|
 | `unwrap()` | Returns `data` | Raises `ResultUnwrapException` |
 | `expect(msg)` | Returns `data` | Raises `ResultUnwrapException` with custom `msg` |
 | `unwrap_or(default)` | Returns `data` | Returns `default` |
@@ -231,7 +231,7 @@ When `unwrap()` or `expect()` raises on a failed result, the exception keeps the
 
 ## Examples
 
-The [examples/](examples/) directory contains 40+ runnable scripts organized by module.
+The [examples/](../../examples/) directory contains 40+ runnable scripts organized by module.
 Each script is self-contained and prints `TEST COMPLETE` on success.
 
 | Module | Examples |
@@ -245,25 +245,24 @@ Each script is self-contained and prints `TEST COMPLETE` on success.
 | GlobalVars | Basic CRUD, attribute/call syntax, thread locking, shared memory IPC |
 | DecoratorUtils | Runtime measurement |
 
-See [Examples.md](docs/en/Examples.md) for a full listing with descriptions.
+See [Examples](Examples.md) for a full listing with descriptions.
 
 ## Version Policy
 
 - The `4.x` line aims to keep public behavior stable unless a change clearly fixes broken or misleading behavior
-- Breaking changes are called out explicitly in the [Release Notes](docs/en/RELEASE_NOTES.md) and [Migration Guide](docs/en/MIGRATION_GUIDE.md)
+- Breaking changes are called out explicitly in the [Release Notes](RELEASE_NOTES.md) and [Migration Guide](MIGRATION_GUIDE.md)
 - Deprecation aliases may remain for compatibility, but new code should follow the current documented names and semantics
 
 ## Documentation
 
-- [API Reference](docs/en/API.md) — Full method signatures, parameters, return values, and usage examples
-- [Migration Guide](docs/en/MIGRATION_GUIDE.md) — Upgrade paths from 2.x or 3.x to 4.x
-- [Release Notes](docs/en/RELEASE_NOTES.md) — Changelog and version history
-- [Examples](docs/en/Examples.md) — 40+ runnable example scripts with descriptions
-- [한국어 문서 (Korean)](docs/ko/README.md)
+- [API Reference](API.md) - Full method signatures, parameters, return values, and usage examples
+- [Migration Guide](MIGRATION_GUIDE.md) - Upgrade paths from 2.x or 3.x to 4.x
+- [Release Notes](RELEASE_NOTES.md) - Changelog and version history
+- [Examples](Examples.md) - 40+ runnable example scripts with descriptions
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[Apache License 2.0](../../LICENSE)
 
 ## Links
 

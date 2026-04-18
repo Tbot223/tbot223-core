@@ -1,10 +1,14 @@
+<!-- markdownlint-disable-file MD041 -->
+
+[한국어 (Korean)](../ko/API.md)
+
+> This document is based on tbot223-core v4.0.0.
+
 # API Reference
 
-> tbot223-core v4.0.0 | Python 3.10 - 3.14
+> Python 3.10 - 3.14
 
-[한국어 (Korean)](API.ko.md)
-
-For installation and quick start, see the [README](../README.md).
+For installation and quick start, see the [README](README.md).
 For runnable example scripts, see the [Examples](Examples.md).
 
 <details>
@@ -22,6 +26,7 @@ For runnable example scripts, see the [Examples](Examples.md).
 - [DecoratorUtils](#decoratorutils)
 - [Error Information Structure](#error-information-structure)
 - [Shared Memory Usage](#shared-memory-usage)
+
 </details>
 
 ## AppCore

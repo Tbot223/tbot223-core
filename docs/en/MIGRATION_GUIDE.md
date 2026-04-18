@@ -1,6 +1,10 @@
-# Migration Guide
+<!-- markdownlint-disable-file MD041 -->
 
-[한국어 (Korean)](MIGRATION_GUIDE.ko.md)
+[한국어 (Korean)](../ko/MIGRATION_GUIDE.md)
+
+> This document is based on v4.0.0.
+
+# Migration Guide
 
 This guide now covers the upgrade path to 4.x for both older 2.x codebases and 3.x codebases. If you are upgrading from 3.x, start with the `3.1.1 -> 4.0.0` section below. If you are upgrading from 2.x, read that section and the earlier `2.x -> 3.0.0` major-upgrade section further down.
 
@@ -23,6 +27,7 @@ This guide now covers the upgrade path to 4.x for both older 2.x codebases and 3
 - [Result Object Changes](#result-object-changes)
 - [2.x to 3.0.0 Checklist](#legacy-checklist)
 - [Compatibility Notes](#compatibility-notes)
+
 </details>
 
 <a id="upgrade-3-1-1-to-4-0-0"></a>
@@ -206,13 +211,18 @@ The no-argument form still works. This is an additive change, not a breaking one
 - `RELEASE_NOTES.md`
 - `examples/Examples.md`
 
-**After (4.0.0):**
+**Current layout:**
 
-- `docs/MIGRATION_GUIDE.md`
-- `docs/RELEASE_NOTES.md`
-- `docs/Examples.md`
+- `docs/en/README.md`
+- `docs/en/MIGRATION_GUIDE.md`
+- `docs/en/RELEASE_NOTES.md`
+- `docs/en/Examples.md`
+- `docs/ko/README.md`
+- `docs/ko/MIGRATION_GUIDE.md`
+- `docs/ko/RELEASE_NOTES.md`
+- `docs/ko/Examples.md`
 
-Root-level `README.md` and `README.ko.md` remain in place.
+Root-level `README.md` remains in place.
 
 **Action required:**
 

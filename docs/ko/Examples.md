@@ -1,6 +1,10 @@
-# 예제
+<!-- markdownlint-disable-file MD041 -->
 
-[English](Examples.md)
+[English](../en/Examples.md)
+
+> 이 문서는 v4.0.0 기준입니다.
+
+# 예제
 
 모든 예제는 **독립 실행 가능한 스크립트**입니다. 성공 시 `TEST COMPLETE`를 출력합니다.
 

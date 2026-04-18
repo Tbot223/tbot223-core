@@ -1,3 +1,7 @@
+[한국어 (Korean)](../../ko/FOR_LLM/DOCSTRING_CONTRACT.md)
+
+> Contract revision: 2026-04-19.
+
 # Docstring Contract for LLM
 
 > 이 문서는 사람이 읽는 계약서가 아니라, LLM이 docstring 생성 작업을 수행할 때 직접 따라야 하는 실행 지시서다.
@@ -139,8 +143,8 @@
 ## 붙여넣기용 프롬프트
 
 ```text
-먼저 docs/CONTRACT/FOR_HUMAN/DOCSTRING_CONTRACT.md를 읽고 규약을 익힌 뒤,
-docs/CONTRACT/FOR_LLM/DOCSTRING_CONTRACT.md를 작업 지시서로 사용해서 방금 준 코드의 docstring을 작성해줘.
+먼저 docs/CONTRACT/en/FOR_HUMAN/DOCSTRING_CONTRACT.md를 읽고 규약을 익힌 뒤,
+docs/CONTRACT/en/FOR_LLM/DOCSTRING_CONTRACT.md를 작업 지시서로 사용해서 방금 준 코드의 docstring을 작성해줘.
 특히 Constraint는 코드의 if문, raise, 실패 반환 로직을 분석해서 정형 패턴으로 누락 없이 작성하고,
 코드에 없는 제약은 절대 추가하지 마.
 Example은 실제 import와 실제 함수명을 사용해서 바로 실행 가능한 형태로 작성해.

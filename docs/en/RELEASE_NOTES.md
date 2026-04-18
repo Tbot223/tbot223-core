@@ -1,6 +1,6 @@
 # Release Notes
 
-[한국어 (Korean)](RELEASE_NOTES.ko.md)
+[한국어 (Korean)](../ko/RELEASE_NOTES.md)
 
 <details>
 <summary>Table of Contents</summary>
@@ -37,7 +37,7 @@
 
 ### Changed
 
-- **Documentation layout**: Moved long-form documentation into `docs/` and kept only `README.md` and `README.ko.md` at the repository root.
+- **Documentation layout**: Long-form documentation is grouped by language under `docs/en/` and `docs/ko/`, with `README.md` at the repository root.
 - **Documentation fidelity**: Rewrote README/API/Examples content to match the current runtime behavior, including executor result shapes, `Result` failure payloads, logging path semantics, localization fallback, bool parsing, PBKDF2 payload shape, and shared-memory ownership/cleanup behavior.
 - **AppCore**: Worker defaults are now resolved at call time instead of import time, so omitted `workers` values track the current CPU count and avoid stale defaults.
 - **Tests/Tooling**: Retired the legacy root-level `test.py` flow and centered the maintained test workflow on the `TEST/SRC/` pytest suite.

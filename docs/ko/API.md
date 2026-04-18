@@ -1,11 +1,15 @@
-[English](API.md)
+<!-- markdownlint-disable-file MD041 -->
+
+[English](../en/API.md)
+
+> 이 문서는 tbot223-core v4.0.0 기준입니다.
 
 # API 레퍼런스
 
-> tbot223-core v4.0.0 | Python 3.10 - 3.14
+> Python 3.10 - 3.14
 
-설치 및 빠른 시작 방법은 [README](../README.ko.md)를 참조하세요.
-실행 가능한 예제 스크립트는 [예제 문서](Examples.ko.md)를 참조하세요.
+설치 및 빠른 시작 방법은 [README](README.md)를 참조하세요.
+실행 가능한 예제 스크립트는 [예제 문서](Examples.md)를 참조하세요.
 
 <details>
 <summary>목차</summary>

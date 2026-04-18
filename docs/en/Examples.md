@@ -1,6 +1,10 @@
-# Examples
+<!-- markdownlint-disable-file MD041 -->
 
-[한국어 (Korean)](Examples.ko.md)
+[한국어 (Korean)](../ko/Examples.md)
+
+> This document is based on v4.0.0.
+
+# Examples
 
 All examples are **self-contained, runnable scripts**. Each prints `TEST COMPLETE` on success.
 

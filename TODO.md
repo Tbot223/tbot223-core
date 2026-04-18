@@ -26,7 +26,7 @@
 
 ## 5.0.0 — Core Decomposition (정식)
 
-- [ ] 신규/변경 모듈 독스트링 계약(`docs/CONTRACT/FOR_HUMAN/DOCSTRING_CONTRACT.md`) 적용
+- [ ] 신규/변경 모듈 독스트링 계약(`docs/CONTRACT/ko/FOR_HUMAN/DOCSTRING_CONTRACT.md`) 적용
 - [ ] LookupDict stub 유지 확인
 - [ ] 알파 단계 잔여 이슈 정리
 
