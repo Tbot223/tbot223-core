@@ -1,13 +1,13 @@
 # external Modules
 import hashlib
 import secrets
-import logging
+
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Union
 
 # internal Modules
 from tbot223_core.Exception import ExceptionTracker
-from tbot223_core.LogSys import LoggerManager, Log
+
 from tbot223_core.Result import Result
 from tbot223_core._default_init import DefaultInit
 
@@ -15,11 +15,13 @@ class Utils:
     """
     General-purpose helper functions used across the package.
     """
+    _log: Any
+    _exception_tracker: ExceptionTracker
 
     def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
-                 base_dir: Union[str, Path]=None,
+                 base_dir: Optional[Union[str, Path]]=None,
 
-                 DefaultInit: Optional[DefaultInit]=DefaultInit,
+                 DefaultInit: Optional[type[DefaultInit]]=DefaultInit,
                  ):
         """
         Initialize the utility helper.
@@ -28,6 +30,8 @@ class Utils:
         self._BASE_DIR = Path(base_dir or Path.cwd())
 
         # Initialize logging and exception tracking using DefaultInit
+        if DefaultInit is None:
+            raise ValueError("DefaultInit dependency cannot be None")
         DefaultInit.run(self, 
             is_logging_enabled=is_logging_enabled, 
             is_debug_enabled=is_debug_enabled, 
@@ -65,7 +69,7 @@ class Utils:
         if not isinstance(salt_size, int) or salt_size <= 0:
             raise ValueError("salt_size must be a positive integer")
 
-    def _lookup_dict(self, dict_obj: Dict, threshold: Union[int, float, str, bool], comparison_func: Callable, comparison_type: str, nested: bool = False, separator: str = "/" , return_mod: str = "flat", prefix_marker: str = "") -> Union[List[Union[str, Dict]], Tuple[Union[str, Dict], ...]]:
+    def _lookup_dict(self, dict_obj: Dict[Any, Any], threshold: Union[int, float, str, bool], comparison_func: Callable[[Any], bool], comparison_type: str, nested: bool = False, separator: str = "/" , return_mod: str = "flat", prefix_marker: str = "") -> Any:
         """
         Recursively search a dictionary for keys whose values match a
         comparison rule.
@@ -124,7 +128,7 @@ class Utils:
         return tuple(found_keys) if separator == "tuple" else found_keys
 
     # external Methods
-    def str_to_path(self, path_str: str) -> Result:
+    def str_to_path(self, path_str: Any) -> Result:
         """
         Convert a string to a `Path` object.
 
@@ -343,7 +347,7 @@ class Utils:
         except Exception as e:
             return self._exception_tracker.get_exception_return(e)
 
-    def find_keys_by_value(self, dict_obj: Dict, threshold: Union[int, float, str, bool],  comparison: str='eq', nested: bool=False, separator: str = "/", return_mod: str = "flat") -> Result:
+    def find_keys_by_value(self, dict_obj: Dict[Any, Any], threshold: Union[int, float, str, bool],  comparison: str='eq', nested: bool=False, separator: str = "/", return_mod: str = "flat") -> Result:
         """
         Find dictionary keys whose values satisfy a comparison rule.
 

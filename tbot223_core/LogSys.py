@@ -1,6 +1,6 @@
 # external Modules
 import os
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, Tuple
 from pathlib import Path
 import logging
 import time as time_module
@@ -14,7 +14,7 @@ class LoggerManager:
     """
     Create and manage named loggers backed by file and stream handlers.
     """
-    def __init__(self, base_dir: Union[str, Path]=None, second_log_dir: Union[str, Path]="default"):
+    def __init__(self, base_dir: Optional[Union[str, Path]]=None, second_log_dir: Union[str, Path]="default"):
         """
         Initialize the logger manager.
         """
@@ -167,7 +167,7 @@ class Log:
     objects.
     """
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(self, logger: Optional[logging.Logger] = None):
         """
         Initialize the wrapper with a logger instance.
         """
@@ -211,6 +211,8 @@ class Log:
         try:
             if isinstance(level, str):
                 level = self.log_levels.get(level.upper(), logging.INFO)
+            if level is None:
+                level = logging.INFO
 
             self.logger.log(level, message)
             return Result(True, None, None, "Log message sent successfully.")
@@ -247,7 +249,7 @@ class SimpleSetting:
             self.logger = None
         self.log = Log(self.logger)
 
-    def get_instance(self):
+    def get_instance(self) -> Tuple[LoggerManager, Log, Optional[logging.Logger]]:
         """
         Return the initialized logging helpers.
 

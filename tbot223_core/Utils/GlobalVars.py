@@ -1,15 +1,16 @@
 # external Modules
 from multiprocessing import shared_memory, RLock, Lock
-import pickle, json
-from typing import Optional, Union
+import pickle
+import json
+from typing import Any, Dict, Optional, Set, Union, cast
 from pathlib import Path
-import logging
+
 import struct
 
 # internal Modules
 from tbot223_core.Result import Result
 from tbot223_core.Exception import ExceptionTracker
-from tbot223_core.LogSys import LoggerManager, Log
+
 from tbot223_core._default_init import DefaultInit
 
 class GlobalVars:
@@ -63,12 +64,21 @@ class GlobalVars:
 
     """
 
+    _log: Any
+    _exception_tracker: ExceptionTracker
+    __vars__: Dict[str, Any]
+    __lock__: Any
+    __shm_name__: Set[str]
+    __shm_owner__: Set[str]
+    __shm_cache__: Dict[str, shared_memory.SharedMemory]
+    __shm_cache_max_size__: int
+    SERIALIZERS: Dict[str, Any]
     _MISSING = object()
 
-    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
-                 base_dir: Union[str, Path]=None,
+    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False,
+                 base_dir: Optional[Union[str, Path]]=None,
                  shared_memory_cache_max_size: int=5,
-                 DefaultInit: Optional[DefaultInit]=DefaultInit
+                 DefaultInit: Optional[type[DefaultInit]]=DefaultInit
                  ):
 
         # Set initialization flag to bypass __setattr__ during __init__
@@ -83,9 +93,11 @@ class GlobalVars:
         self.__is_logging_enabled__ = is_logging_enabled
 
         # Initialize Classes
-        DefaultInit.run(self, 
-            is_logging_enabled=is_logging_enabled, 
-            is_debug_enabled=is_debug_enabled, 
+        if DefaultInit is None:
+            raise ValueError("DefaultInit dependency cannot be None")
+        DefaultInit.run(self,
+            is_logging_enabled=is_logging_enabled,
+            is_debug_enabled=is_debug_enabled,
             base_dir=self._BASE_DIR / "logs", second_log_dir="Utils.GlobalVars", logger_name="Utils.GlobalVarsLogger", log_level="AUTO"
         )
 
@@ -303,8 +315,9 @@ class GlobalVars:
             >>> print(globals.api_key)  # Output: 12345 ( this part uses __getattr__ )
         """
         try:
-            with object.__getattribute__(self, '__lock__'):
-                vars_dict = object.__getattribute__(self, '__vars__')
+            lock = cast(Any, object.__getattribute__(self, '__lock__'))
+            vars_dict = cast(Dict[str, Any], object.__getattribute__(self, '__vars__'))
+            with lock:
                 if name not in vars_dict:
                     raise KeyError(name)
                 return vars_dict[name]
@@ -318,7 +331,7 @@ class GlobalVars:
                 pass
             raise
 
-    def __setattr__(self, name: str, value: object) -> Union[None, Result]:
+    def __setattr__(self, name: str, value: object) -> None:
         """
         Set a global variable by attribute access.
 
@@ -346,17 +359,18 @@ class GlobalVars:
 
         # After initialization, store in __vars__ dict
         try:
-            with object.__getattribute__(self, '__lock__'):
+            lock = cast(Any, object.__getattribute__(self, '__lock__'))
+            with lock:
                 if name is None or not isinstance(name, str) or name.strip() == "":
                     raise ValueError("name must be a non-empty string.")
 
-                vars_dict = object.__getattribute__(self, '__vars__')
+                vars_dict = cast(Dict[str, Any], object.__getattribute__(self, '__vars__'))
                 vars_dict[name] = value
                 if object.__getattribute__(self, '__is_logging_enabled__'):
                     object.__getattribute__(self, 'log').log_message("INFO", f"Global variable '{name}' set via attribute access.")
         except Exception as e:
             exception_tracker = object.__getattribute__(self, '_exception_tracker')
-            return exception_tracker.get_exception_return(e)
+            raise RuntimeError(exception_tracker.get_exception_return(e).error or str(e)) from e
 
     def __call__(self, key: str, value: object=_MISSING, overwrite: bool=False) -> Result:
         """
@@ -382,7 +396,7 @@ class GlobalVars:
             >>>     print(result.error)
         """
         try:
-            if value is not self._MISSING:
+            if value is not cast(Any, self._MISSING):
                 return self.set(key, value, overwrite)
             else:
                 return self.get(key)
@@ -434,10 +448,10 @@ class GlobalVars:
                     else:
                         self._log("INFO", f"Shared memory cache for '{oldest_key}' removed due to cache size limit.")
 
-                if name not in self.__shm_cache__ and shm is not None:
+                if name is not None and name not in self.__shm_cache__ and shm is not None:
                     self.__shm_cache__[name] = shm
                     self._log("INFO", f"Shared memory cache for '{name}' created.")
-                elif name in self.__shm_cache__ and shm is not None:
+                elif name is not None and name in self.__shm_cache__ and shm is not None:
                     self.__shm_cache__[name] = shm
                     self._log("INFO", f"Shared memory cache for '{name}' updated.")
                 elif name is None and shm is None:
@@ -446,9 +460,11 @@ class GlobalVars:
                     self.__shm_cache__.clear()
                     self._log("INFO", "All shared memory caches cleared.")
                 else:
-                    shm_obj = self.__shm_cache__.get(name)
-                    self.__shm_cache__.pop(name, None)
-                    self.__shm_cache__[name] = shm_obj
+                    cache_name = cast(str, name)
+                    shm_obj = self.__shm_cache__.get(cache_name)
+                    self.__shm_cache__.pop(cache_name, None)
+                    if shm_obj is not None:
+                        self.__shm_cache__[cache_name] = shm_obj
                     self._log("INFO", f"Shared memory cache for '{name}' accessed.")
 
             return Result(True, None, None, "success to manage shared memory cache")
@@ -456,7 +472,7 @@ class GlobalVars:
             self._log("ERROR", f"Failed to manage shared memory cache: {e}")
             return self._exception_tracker.get_exception_return(e)
 
-    def shm_gen(self, name: str=None, size: int=1024, create_lock: bool=True) -> Result:
+    def shm_gen(self, name: Optional[str]=None, size: int=1024, create_lock: bool=True) -> Result:
         """
         Create or attach to a shared-memory block for inter-process use.
 
@@ -612,7 +628,8 @@ class GlobalVars:
             if serialize_format not in self.SERIALIZERS:
                 raise ValueError(f"Unsupported serialization format: {serialize_format}")
 
-            byte_dict = self.SERIALIZERS[serialize_format][0](self.__vars__)
+            serializer = cast(Any, self.SERIALIZERS[serialize_format])  # type: ignore[index]
+            byte_dict = serializer[0](self.__vars__)  # type: ignore[index]
 
             data_len = len(byte_dict)
             header_size = 8 # bytes to store length of data
@@ -623,13 +640,13 @@ class GlobalVars:
                 shm = shared_memory.SharedMemory(name=name)
                 self.shm_cache_management(name, shm)
             else:
-                shm = self.__shm_cache__[name]
+                shm = cast(shared_memory.SharedMemory, self.__shm_cache__[name])
 
             if data_len + header_size > shm.size:
                 raise MemoryError(f"Serialized data size ({data_len + header_size} bytes) exceeds shared memory size ({shm.size} bytes).")
 
-            shm.buf[:header_size] = struct.pack('Q', data_len)
-            shm.buf[header_size:header_size+data_len] = byte_dict
+            shm.buf[:header_size] = struct.pack('Q', data_len)  # type: ignore[index]
+            shm.buf[header_size:header_size+data_len] = byte_dict  # type: ignore[index]
 
             self._log("INFO", f"Shared memory object '{name}' synchronized.")
             return Result(True, None, None, "success to synchronize shared memory object")
@@ -664,20 +681,21 @@ class GlobalVars:
             if serialize_format not in self.SERIALIZERS:
                 raise ValueError(f"Unsupported serialization format: {serialize_format}")
 
-            shm = self.shm_get(name).data
+            shm = cast(shared_memory.SharedMemory, self.shm_get(name).data)
             header_size = 8 # bytes to store length of data
 
-            packed_len = bytes(shm.buf[:header_size])
+            packed_len = bytes(shm.buf[:header_size])  # type: ignore[index]
             (data_len,) = struct.unpack('Q', packed_len)
 
             if data_len == 0:
                 self._log("WARNING", f"No data found in shared memory object '{name}'.")
                 return Result(True, None, None, "no data to update from shared memory object")
 
-            byte_dict = bytes(shm.buf[header_size:header_size+data_len])
+            byte_dict = bytes(shm.buf[header_size:header_size+data_len])  # type: ignore[index]
 
             try:
-                obj_dict = self.SERIALIZERS[serialize_format][1](byte_dict)
+                serializer = cast(Any, self.SERIALIZERS[serialize_format])  # type: ignore[index]
+                obj_dict = cast(Dict[str, Any], serializer[1](byte_dict))  # type: ignore[index]
             except Exception as e:
                 raise ValueError(f"Deserialization error ({serialize_format}). Read {data_len} bytes from shared memory but failed to deserialize: {e}")
 
@@ -716,7 +734,7 @@ class GlobalVars:
         try:
             if name not in self.__shm_name__:
                 raise ValueError("Shared memory name does not match the created one.")
-            shm = self.shm_get(name).data
+            shm = cast(shared_memory.SharedMemory, self.shm_get(name).data)
             shm.close()
             if not close_only and name in self.__shm_owner__:
                 shm.unlink()
@@ -735,7 +753,7 @@ class GlobalVars:
             self._log("ERROR", f"Failed to close shared memory object '{name}': {e}")
             return self._exception_tracker.get_exception_return(e)
 
-    def lock(self) -> RLock: # type: ignore
+    def lock(self) -> Any:
         """
         Return the `RLock` used to guard this instance's state.
 
@@ -753,8 +771,10 @@ class GlobalVars:
         return self.__lock__
 
     def __enter__(self):
-        self.__lock__.acquire()
+        lock = cast(Any, self.__lock__)
+        lock.acquire()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.__lock__.release()
+        lock = cast(Any, self.__lock__)
+        lock.release()

@@ -1,5 +1,5 @@
 # external Modules
-from typing import Optional, Union, Any, Tuple
+from typing import Optional, Union, Any, Tuple, cast
 from pathlib import Path
 import logging
 
@@ -43,7 +43,7 @@ class DefaultInit:
             base_dir: Optional[Union[str, Path]] = None, second_log_dir: Optional[str] = None, logger_name: Optional[str] = None, log_level: Union[int, str] = logging.INFO,
             masking: Optional[Tuple[bool, bool, bool, bool]] = None,
             
-            ExceptionTracker=ExceptionTracker, SimpleSetting=SimpleSetting
+            ExceptionTracker: type[ExceptionTracker]=ExceptionTracker, SimpleSetting: type[SimpleSetting]=SimpleSetting
             ) -> None:
         """
         A callable class that initializes a target instance with logging and exception tracking capabilities.
@@ -107,6 +107,8 @@ class DefaultInit:
         # Determine log level based on debug mode if set to AUTO
         if log_level == "AUTO":
             log_level = logging.DEBUG if is_debug_enabled else logging.INFO
+        if not isinstance(log_level, int):
+            raise ValueError("log_level must be an int or 'AUTO'.")
         # Additional validation for debug mode
         if is_debug_enabled and not is_logging_enabled:
             raise ValueError("Debug mode cannot be enabled without logging enabled.")
@@ -125,7 +127,13 @@ class DefaultInit:
         target_instance._is_debug_enabled = is_debug_enabled
 
         # Initialize logging if enabled, otherwise set logging attributes to None
-        tmp = SimpleSetting(base_dir, second_log_dir, logger_name, log_level).get_instance() if is_logging_enabled or is_debug_enabled else (None, None, None) 
+        if is_logging_enabled or is_debug_enabled:
+            resolved_base_dir = cast(Union[str, Path], base_dir)
+            resolved_second_log_dir = cast(str, second_log_dir)
+            resolved_logger_name = cast(str, logger_name)
+            tmp = SimpleSetting(resolved_base_dir, resolved_second_log_dir, resolved_logger_name, log_level).get_instance()
+        else:
+            tmp = (None, None, None)
         target_instance._logger_manager = tmp[0]
         target_instance.log = tmp[1]
         target_instance.logger = tmp[2]

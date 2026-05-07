@@ -6,7 +6,7 @@ import json
 import shutil
 import stat
 import os
-import logging
+
 import warnings
 if os.name != 'nt':
     import fcntl
@@ -16,7 +16,7 @@ else:
 #internal Modules
 from tbot223_core.Result import Result
 from tbot223_core.Exception import ExceptionTracker
-from tbot223_core.LogSys import LoggerManager, Log
+
 from tbot223_core.Utils.Utils import Utils
 from tbot223_core._default_init import DefaultInit
 
@@ -25,15 +25,18 @@ class FileManager:
     File-system helper for safe reads, writes, directory operations, and JSON
     handling.
     """
+    _log: Any
+    _exception_tracker: ExceptionTracker
+    _utils: Utils
 
     # File locking threshold: files larger than this size will be locked during read operations
     LOCK_FILE_SIZE_THRESHOLD = 10 * 1024 * 1024  # 10 MB
 
     def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
-                 base_dir: Union[str, Path]=None,
+                 base_dir: Optional[Union[str, Path]]=None,
 
-                 DefaultInit: Optional[DefaultInit]=DefaultInit,
-                 Utils: Optional[Utils]=Utils
+                 DefaultInit: Optional[type[DefaultInit]]=DefaultInit,
+                 Utils: Optional[type[Utils]]=Utils
                  ):
         """
         Initialize the AppCore instance with logging, exception tracking, and language support.
@@ -58,6 +61,10 @@ class FileManager:
         self._BASE_DIR = Path(base_dir) if base_dir is not None else Path.cwd()
 
         # Initialize logging and exception tracking using DefaultInit
+        if DefaultInit is None:
+            raise ValueError("DefaultInit dependency cannot be None")
+        if Utils is None:
+            raise ValueError("Utils dependency cannot be None")
         DefaultInit.run(self, 
             is_logging_enabled=is_logging_enabled, 
             is_debug_enabled=is_debug_enabled, 
@@ -65,7 +72,7 @@ class FileManager:
         )
         self._utils = Utils()
 
-        self._log("INFO", f"FileManager initialized.")
+        self._log("INFO", "FileManager initialized.")
 
     # internal Methods
     @staticmethod
@@ -107,7 +114,7 @@ class FileManager:
         return self._utils.str_to_path(path).data
 
     @staticmethod
-    def _lock(file: Path, mode: int):
+    def _lock(file: Any, mode: int):
         """
         Apply or release a file lock.
 
@@ -128,19 +135,19 @@ class FileManager:
         """
         if os.name != 'nt':
             if mode == 1:
-                fcntl.flock(file, fcntl.LOCK_EX)
+                fcntl.flock(file, fcntl.LOCK_EX)  # type: ignore[name-defined]
             elif mode == 2:
-                fcntl.flock(file, fcntl.LOCK_SH)
+                fcntl.flock(file, fcntl.LOCK_SH)  # type: ignore[name-defined]
             else:
-                fcntl.flock(file, fcntl.LOCK_UN)
+                fcntl.flock(file, fcntl.LOCK_UN)  # type: ignore[name-defined]
         else:
             if mode == 1:
-                msvcrt.locking(file.fileno(), msvcrt.LK_LOCK, os.path.getsize(file.name))
+                msvcrt.locking(file.fileno(), msvcrt.LK_LOCK, os.path.getsize(file.name))  # type: ignore[name-defined]
             elif mode == 2:
-                lock_mode = msvcrt.LK_RLCK if hasattr(msvcrt, "LK_RLCK") else msvcrt.LK_LOCK
-                msvcrt.locking(file.fileno(), lock_mode, os.path.getsize(file.name))
+                lock_mode = msvcrt.LK_RLCK if hasattr(msvcrt, "LK_RLCK") else msvcrt.LK_LOCK  # type: ignore[name-defined]
+                msvcrt.locking(file.fileno(), lock_mode, os.path.getsize(file.name))  # type: ignore[name-defined]
             else:
-                msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, os.path.getsize(file.name))
+                msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, os.path.getsize(file.name))  # type: ignore[name-defined]
 
 
     def atomic_write(self, file_path: Union[str, Path], data: Any) -> Result:
@@ -330,7 +337,7 @@ class FileManager:
             self._log("ERROR", f"Failed to read JSON from {file_path}: {e}")
             return self._exception_tracker.get_exception_return(e)
 
-    def list_of_files(self, dir_path: Union[str, Path], extensions: List[str]=None, only_name: bool = False) -> Result:
+    def list_of_files(self, dir_path: Union[str, Path], extensions: Optional[List[str]]=None, only_name: bool = False) -> Result:
         """
         List files in a directory.
 
@@ -442,7 +449,7 @@ class FileManager:
                 raise FileNotFoundError(f"File not found: {file_path}")
             try:
                 file_path.unlink()
-            except PermissionError as e:
+            except PermissionError:
                 self._log("ERROR", f"Permission denied when deleting {file_path}, attempting to change permissions and retry.")
                 os.chmod(file_path, stat.S_IWRITE)
                 file_path.unlink()
