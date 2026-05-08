@@ -71,7 +71,7 @@ class ExceptionTracker():
             tb_str = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
             return Result(False, f"{type(e).__name__} :{str(e)}", "Core.ExceptionTracker.get_exception_location, L1", tb_str)
 
-    def get_exception_info(self, error: Exception, user_input: Any=None, params: Tuple[Tuple, dict]=None, mask_tuple: Tuple[bool, ...] = ()) -> Result:
+    def get_exception_info(self, error: Exception, user_input: Any=None, params: Tuple[Tuple, dict]=((), {}), mask_tuple: Tuple[bool, ...] = ()) -> Result:
         """
         Build a detailed error information payload for an exception.
 
@@ -80,7 +80,7 @@ class ExceptionTracker():
 
         Args:
             `error` : The exception object to track.
-            `user_input` : User input context related to the exception. Defaults to None.
+            `user_input` : User input context related to the exception. Defaults to `((), {})`.
             `params` : Additional call context related to the exception.
                 Expected format: `(args, kwargs)`.
             `mask_tuple` : A tuple of booleans indicating which parts of the
@@ -114,7 +114,7 @@ class ExceptionTracker():
             if error is None:
                 raise ValueError("The 'error' argument must be an Exception instance, not None.")
             if params is None or not isinstance(params, tuple) or not len(params) == 2 or not isinstance(params[0], tuple) or not isinstance(params[1], dict):
-                raise ValueError("The 'params' argument must be a tuple of (args, kwargs). (if you want empty, use '((), {})' )")
+                raise ValueError("The 'params' argument must be a tuple of (args, kwargs).")
             if not isinstance(mask_tuple, tuple) or not all(isinstance(i, bool) for i in mask_tuple):
                 raise ValueError("The 'mask_tuple' argument must be a tuple of booleans.")
             if len(mask_tuple) != 4:
@@ -124,7 +124,8 @@ class ExceptionTracker():
             frame = tb[-1]  # Most recent frame
             frame2 = tb[0]  # Original frame
 
-            masking = lambda index, return_value: "<Masked>" if mask_tuple[index] else return_value
+            def masking(index, return_value):
+                return "<Masked>" if mask_tuple[index] else return_value
 
             error_info = {
                 "success": False,
@@ -277,7 +278,7 @@ class ExceptionTrackerDecorator():
         >>> print(risky_function(10, y=0).data['params'])
         >>> # Output: ((10,), {'y': 0})
     """
-    def __init__(self, mask_tuple: Tuple[bool, bool, bool, bool] = (False, False, False, False), tracker: ExceptionTracker=None):
+    def __init__(self, mask_tuple: Tuple[bool, bool, bool, bool] = (False, False, False, False), tracker: ExceptionTracker=ExceptionTracker()):
         self.tracker = tracker or ExceptionTracker()
         self.mask_tuple = mask_tuple
         if not isinstance(self.mask_tuple, tuple) or not all(isinstance(i, bool) for i in self.mask_tuple):

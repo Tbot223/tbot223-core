@@ -2,19 +2,17 @@
 import os
 import subprocess
 import sys
-from typing import Any, Callable, List, Dict, Tuple, Union, Optional, Generator
+from typing import Any, Callable, List, Dict, Tuple, Union, Optional, Generator, Type, cast
 import math
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import multiprocessing
-import logging
 from functools import wraps
 
 #internal Modules
 from tbot223_core.Result import Result
 from tbot223_core.Exception import ExceptionTracker
 from tbot223_core.FileManager import FileManager
-from tbot223_core.LogSys import LoggerManager, Log
 from tbot223_core._default_init import DefaultInit
 
 class AppCore:
@@ -22,13 +20,16 @@ class AppCore:
     Core application utilities for parallel execution, localization, console
     control, and interactive CLI input.
     """
+    _log: Callable[[str, str], None]
+    _exception_tracker: ExceptionTracker
+    _file_manager: FileManager
 
-    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False, 
+    def __init__(self, is_logging_enabled: bool=True, is_debug_enabled: bool=False,
                  default_lang: str="en",
-                 base_dir: Union[str, Path]=None,
+                 base_dir: Optional[Union[str, Path]]=None,
 
-                 DefaultInit: Optional[DefaultInit]=DefaultInit,
-                 FileManager: Optional[FileManager]=FileManager):
+                 DefaultInit: Optional[Type[DefaultInit]]=DefaultInit,
+                 FileManager: Optional[Type[FileManager]]=FileManager):
         """
         Initialize the `AppCore` instance with logging, exception tracking, and language support.
 
@@ -43,8 +44,8 @@ class AppCore:
         | **(O)** | `is_debug_enabled` | `bool` | Enable or disable debug mode. Default: `False`. |
         | **(O)** | `default_lang` | `str` | Default language code. Default: `"en"`. |
         | **(O)** | `base_dir` | `Union[str, Path]` | Base directory for the application. Default: `None`. |
-        | **(D)** | `DefaultInit` | `Optional[DefaultInit]` | Custom `DefaultInit` class for dependency injection. Default: built-in `DefaultInit`. |
-        | **(D)** | `FileManager` | `Optional[FileManager]` | Custom `FileManager` class for dependency injection. Default: built-in `FileManager`. |
+        | **(D)** | `DefaultInit` | `Optional[Type[DefaultInit]]` | Custom `DefaultInit` class for dependency injection. Default: built-in `DefaultInit`. |
+        | **(D)** | `FileManager` | `Optional[Type[FileManager]]` | Custom `FileManager` class for dependency injection. Default: built-in `FileManager`. |
 
         ### Returns
         `None`
@@ -69,11 +70,17 @@ class AppCore:
         Path.mkdir(self._LANG_DIR, exist_ok=True)
 
         # Initialize logging and exception tracking using DefaultInit
-        DefaultInit.run(self, 
-                        is_logging_enabled =is_logging_enabled, 
-                        is_debug_enabled=is_debug_enabled, 
+        if DefaultInit is None:
+            raise ValueError("DefaultInit dependency cannot be None")
+        if FileManager is None:
+            raise ValueError("FileManager dependency cannot be None")
+        DefaultInit._validate_dependency((DefaultInit, FileManager))
+
+        DefaultInit.run(self,
+                        is_logging_enabled=is_logging_enabled,
+                        is_debug_enabled=is_debug_enabled,
                         base_dir=self._PARENT_DIR / "logs", second_log_dir="app_core", logger_name="AppCoreLogger", log_level="AUTO")
-        self._file_manager  = FileManager or FileManager(is_logging_enabled=False, base_dir=self._PARENT_DIR)
+        self._file_manager = FileManager(is_logging_enabled=False, base_dir=self._PARENT_DIR)
 
         # Initialize internal variables
         self._lang_cache = {}
@@ -87,7 +94,7 @@ class AppCore:
 
     # internal Methods
     @staticmethod
-    def _check_executable(data: List[Tuple[Callable[ ... , Any], Dict]], workers: int, override: bool, timeout: float, chunk_size: Optional[int] = None) -> Tuple[bool, Optional[str]]:
+    def _check_executable(data: List[Tuple[Callable[..., Any], Dict[str, Any]]], workers: int, override: bool, timeout: Optional[float], chunk_size: Optional[int] = None) -> Tuple[bool, Optional[str]]:
         """
         Validate parameters for the executor methods.
 
@@ -176,7 +183,7 @@ class AppCore:
             return cpu_count if override else min(cpu_count, max(data_length, 1))
         return min(workers, cpu_count) if override else workers
 
-    def _generic_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: int, timeout: float, type: str) -> List[Result]:
+    def _generic_executor(self, data: List[Tuple[Callable[..., Any], Dict[str, Any]]], workers: int, timeout: float, type: str) -> List[Result]:
         """
         Shared executor implementation used by the thread and process pools.
 
@@ -220,10 +227,10 @@ class AppCore:
         >>> for res in results:
         >>>     print(res.success, res.data)
         """
-        results = [None] * len(data)
+        results: List[Optional[Result]] = [None] * len(data)
 
         executor_class = ThreadPoolExecutor if type == 'thread' else ProcessPoolExecutor
-        executor_kwargs = {"max_workers": workers}
+        executor_kwargs: Dict[str, Any] = {"max_workers": workers}
         if type == 'process':
             executor_kwargs["mp_context"] = multiprocessing.get_context("spawn")
         with executor_class(**executor_kwargs) as executor:
@@ -236,8 +243,8 @@ class AppCore:
                     results[idx] = Result(True, None, None, result)
                 except Exception as e:
                     self._log("ERROR", f"Error executing task at index {idx}: {str(e)}")
-                    results[idx] = self._exception_tracker.get_exception_return(e, params=data[idx][1])
-        return results
+                    results[idx] = self._exception_tracker.get_exception_return(e, params=((), data[idx][1]))
+        return cast(List[Result], results)
 
     def _chunk_list(self, data_list: List, chunk_size: int) -> Generator[List, None, None]:
         """
@@ -320,7 +327,7 @@ class AppCore:
 
 
     # external Methods
-    def thread_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: Optional[int] = None, override: bool = False, timeout: float = None) -> Result:
+    def thread_pool_executor(self, data: List[Tuple[Callable[..., Any], Dict[str, Any]]], workers: Optional[int] = None, override: bool = False, timeout: float = 0.1) -> Result:
         """
         Execute tasks concurrently with `ThreadPoolExecutor`.
 
@@ -330,7 +337,7 @@ class AppCore:
         | **(R)** | `data` | `List[Tuple[Callable[..., Any], Dict[str, Any]]]` | A list of `(callable, kwargs_dict)` tuples. |
         | **(O)** | `workers` | `Optional[int]` | Number of worker threads. Default: `None` (CPU count). |
         | **(O)** | `override` | `bool` | Allow workers to exceed task count. Default: `False`. |
-        | **(O)** | `timeout` | `float` | Max wait time per task in seconds. Default: `None`. |
+        | **(O)** | `timeout` | `float` | Max wait time per task in seconds. Default: `0.1`. |
 
         ### Callable Signature
         > `data` element: `Tuple[Callable[..., Any], Dict[str, Any]]`
@@ -379,7 +386,7 @@ class AppCore:
             self._log("ERROR", f"Error in thread pool executor: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
 
-    def process_pool_executor(self, data: List[Tuple[Callable[ ... , Any], Dict]], workers: Optional[int] = None, override: bool = False, timeout: float = None, chunk_size: Optional[int] = None) -> Result:
+    def process_pool_executor(self, data: List[Tuple[Callable[..., Any], Dict[str, Any]]], workers: Optional[int] = None, override: bool = False, timeout: Optional[float] = None, chunk_size: Optional[int] = None) -> Result:
         """
         Execute tasks concurrently with `ProcessPoolExecutor`.
 
@@ -437,14 +444,15 @@ class AppCore:
             if not is_valid:
                 self._log("ERROR", f"Process pool executor validation failed: {error_message}")
                 return Result(False, error_message, None, None)
+            effective_timeout = timeout if timeout is not None else 0.1
             if chunk_size is None:
-                results = self._generic_executor(data, resolved_workers, timeout, type='process')
+                results = self._generic_executor(data, resolved_workers, effective_timeout, type='process')
             else:
                 computed_chunk = chunk_size if chunk_size > 0 else max(1, int(math.ceil(len(data) / resolved_workers)))
                 chunks = list(self._chunk_list(data, computed_chunk))
                 results = []
                 for chunk in chunks:
-                    chunk_results = self._generic_executor(chunk, resolved_workers, timeout, type='process')
+                    chunk_results = self._generic_executor(chunk, resolved_workers, effective_timeout, type='process')
                     results.extend(chunk_results)
 
             self._log("INFO", f"Process pool executor completed with {len(results)} tasks.")
@@ -600,7 +608,7 @@ class AppCore:
             self._log("ERROR", f"Error in restart_application: {str(e)}")
             return self._exception_tracker.get_exception_return(e)
 
-    def safe_CLI_input(self, prompt: str="", input_type: type=str, other_type: bool=False, valid_options: List[str]=None, case_sensitive: bool=False, allow_empty: bool=False, max_retries: int=10) -> Result:
+    def safe_CLI_input(self, prompt: str="", input_type: type=str, other_type: bool=False, valid_options: Optional[List[str]]=None, case_sensitive: bool=False, allow_empty: bool=False, max_retries: int=10) -> Result:
         """
         Prompt for CLI input with validation and optional type conversion.
 
@@ -675,13 +683,13 @@ class AppCore:
                     user_input = input(prompt)
                 except EOFError:
                     user_input = ""
-                except KeyboardInterrupt as e:
+                except KeyboardInterrupt:
                     self._log("WARNING", "User interrupted input with KeyboardInterrupt.")
                     print("\nInput interrupted by user.")
                     return Result(False, "Input interrupted by user", None, None)
                 if validate_input(user_input):
                     try:
-                        if input_type == bool:
+                        if input_type is bool:
                             true_values = {"true", "t", "yes", "y", "1", "on", "enable", "enabled"}
                             false_values = {"false", "f", "no", "n", "0", "off", "disable", "disabled"}
                             if user_input.lower() in true_values:
