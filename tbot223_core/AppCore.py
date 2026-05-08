@@ -74,6 +74,7 @@ class AppCore:
             raise ValueError("DefaultInit dependency cannot be None")
         if FileManager is None:
             raise ValueError("FileManager dependency cannot be None")
+        DefaultInit._validate_dependency((DefaultInit, FileManager))
 
         DefaultInit.run(self,
                         is_logging_enabled=is_logging_enabled,
